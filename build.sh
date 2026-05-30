@@ -2,6 +2,7 @@
 rm -rf dist
 mkdir -p dist/src/game dist/src/save dist/src/ui
 cp index.html dist/
+cp privacy.html dist/
 cp src/styles.css dist/src/
 cp src/game/*.js dist/src/game/
 cp src/save/*.js dist/src/save/

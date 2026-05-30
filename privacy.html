@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UIRPG — Privacy Policy</title>
+  <style>
+    body { background: #0d0d0d; color: #c0c0c0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; max-width: 640px; margin: 40px auto; padding: 0 20px; }
+    h1 { color: #00aa77; text-transform: uppercase; letter-spacing: 1px; font-size: 16px; }
+    h2 { color: #00aa77; font-size: 12px; margin-top: 24px; text-transform: uppercase; letter-spacing: 1px; }
+    p { margin: 8px 0; }
+    a { color: #00aa77; }
+    .footer { margin-top: 40px; color: #666; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <h1>◆ UIRPG — Privacy Policy</h1>
+  <p><em>Last updated: May 30, 2026</em></p>
+
+  <h2>Data We Collect</h2>
+  <p>UIRPG uses Google Sign-In (OAuth 2.0) solely to enable cloud save sync. When you sign in, we receive your Google profile email address — this is used only as a player identifier to store and retrieve your game saves.</p>
+  <p>The game reads and writes a single file (<code>uirpg_save.json</code>) to your Google Drive's <strong>appDataFolder</strong> — a hidden folder that only this app can access. The file contains your in-game progress (level, inventory, equipment, etc.) and nothing outside the game.</p>
+
+  <h2>Data We Do NOT Collect</h2>
+  <p>We do not collect, store, or transmit any personal data to our own servers. There are no analytics, no cookies, no tracking scripts, and no third-party services except Google's OAuth and Drive APIs. Your save data never touches any server we operate.</p>
+
+  <h2>How Your Data Is Used</h2>
+  <p>Your email and game save are used exclusively for the cloud sync feature. Without signing in, both remain entirely in your browser's localStorage and are never sent anywhere.</p>
+
+  <h2>Data Retention & Deletion</h2>
+  <p>You can delete your cloud save at any time by signing out of the game and manually removing the <code>uirpg_save.json</code> file from your Google Drive's app data folder (Drive settings → Manage apps → UIRPG → Delete hidden app data).</p>
+  <p>No data is retained by the developer — we have no database, no server, no way to access your saves.</p>
+
+  <h2>Contact</h2>
+  <p>For questions about this policy, open an issue at <a href="https://github.com/JamesPTurcotte/UIRPG">github.com/JamesPTurcotte/UIRPG</a>.</p>
+
+  <div class="footer">◆ UIRPG — An idle browser RPG</div>
+</body>
+</html>
