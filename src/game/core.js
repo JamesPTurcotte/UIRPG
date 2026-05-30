@@ -1,0 +1,3 @@
+const UIRPG = {};
+UIRPG.VERSION = '0.1.0';
+UIRPG.SAVE_VERSION = 14;
