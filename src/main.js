@@ -398,8 +398,7 @@
         saveAndRender();
       }).catch((err) => {
         UIRPG.UI.Modal.close();
-        UIRPG.UI.Settings.open(state);
-        if (err.message) console.warn('Sign-in error:', err.message);
+        UIRPG.UI.Settings.open(state, err.message || 'Sign-in failed');
       });
     } else if (action === 'cloud-sign-out') {
       UIRPG.Drive.signOut();

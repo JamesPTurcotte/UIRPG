@@ -1,9 +1,13 @@
 UIRPG.UI = UIRPG.UI || {};
 
 UIRPG.UI.Settings = (() => {
-  function open(s) {
+  function open(s, error) {
     const drive = UIRPG.Drive;
     const isSignedIn = drive && drive.isSignedIn && drive.isSignedIn();
+
+    const errorHtml = error
+      ? `<div style="margin-bottom:10px;padding:6px 8px;background:rgba(204,68,68,0.15);border:1px solid var(--danger);color:var(--danger);font-size:10px;border-radius:2px;">${esc(error)}</div>`
+      : '';
 
     let cloudSection;
     if (isSignedIn) {
@@ -23,6 +27,8 @@ UIRPG.UI.Settings = (() => {
 
     const html = `
       <div class="modal-title">◆ Settings</div>
+
+      ${errorHtml}
 
       <div style="margin-bottom:6px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:9px;">Local Saves</div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -46,5 +52,6 @@ UIRPG.UI.Settings = (() => {
     return `${Math.floor(sec / 3600)}h ago`;
   }
 
+  const esc = UIRPG.Utils.esc;
   return { open };
 })();

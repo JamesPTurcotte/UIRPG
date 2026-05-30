@@ -15,8 +15,24 @@ UIRPG.Drive = (() => {
   function getEmail() { return userEmail; }
   function getLastSync() { return lastSyncTime; }
 
-  function init() {
+  function checkGis() {
     gisLoaded = typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
+  }
+
+  function waitForGis(maxMs) {
+    return new Promise(resolve => {
+      const start = Date.now();
+      function poll() {
+        checkGis();
+        if (gisLoaded || Date.now() - start > maxMs) { resolve(gisLoaded); return; }
+        setTimeout(poll, 100);
+      }
+      poll();
+    });
+  }
+
+  function init() {
+    checkGis();
     const stored = localStorage.getItem(TOKEN_KEY);
     const email = localStorage.getItem(EMAIL_KEY);
     if (stored && email) {
@@ -48,12 +64,13 @@ UIRPG.Drive = (() => {
         reject(new Error('Cloud save requires a Google Client ID. See README.'));
         return;
       }
-      if (!gisLoaded) {
-        reject(new Error('Google sign-in library not loaded. Try refreshing.'));
-        return;
-      }
-      try {
-        tokenClient = google.accounts.oauth2.initTokenClient({
+      waitForGis(5000).then(loaded => {
+        if (!loaded) {
+          reject(new Error('Google sign-in library failed to load. Check your network.'));
+          return;
+        }
+        try {
+          tokenClient = google.accounts.oauth2.initTokenClient({
           client_id: UIRPG.Config.GOOGLE_CLIENT_ID,
           scope: UIRPG.Config.DRIVE_SCOPE,
           callback: (response) => {
@@ -70,9 +87,10 @@ UIRPG.Drive = (() => {
           },
         });
         tokenClient.requestAccessToken();
-      } catch (err) {
-        reject(err);
-      }
+        } catch (err) {
+          reject(err);
+        }
+      });
     });
   }
 
