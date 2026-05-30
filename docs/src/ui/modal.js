@@ -260,6 +260,9 @@ UIRPG.UI.Modal = (() => {
           ◆ Create New Character
         </div>
       </div>
+      <div style="margin-top:12px;text-align:center;">
+        <a href="privacy.html" target="_blank" style="color:var(--text-dim);font-size:9px;text-decoration:none;">Privacy</a>
+      </div>
     `;
 
     show(html);
