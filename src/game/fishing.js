@@ -6,11 +6,11 @@ UIRPG.Fishing = (() => {
     return stats.fishingPower;
   }
 
-  function catchSpeedMult(s) {
+  function catchProgressMult(s) {
     const stats = UIRPG.State.computeStats(s);
     const fpBonus = (stats.fishingPower || 0) * 0.2;
     const gearBonus = (stats.catchSpeed || 0);
-    return Math.max(0.15, 1 - (fpBonus + gearBonus) / 100);
+    return Math.max(1.0, 1 + (fpBonus + gearBonus) / 100);
   }
 
   function treasureChanceBonus(s) {
@@ -52,12 +52,13 @@ UIRPG.Fishing = (() => {
       return;
     }
 
-    const effectiveCatchTime = spot.catchTime * catchSpeedMult(s);
+    const progressMult = catchProgressMult(s);
+    const catchAt = spot.catchTime;
 
-    s.fishingTimer += dt;
+    s.fishingTimer += dt * progressMult;
 
-    if (s.fishingTimer >= effectiveCatchTime) {
-      if (s.fishingTimer > effectiveCatchTime * 1.15) {
+    if (s.fishingTimer >= catchAt) {
+      if (s.fishingTimer > catchAt * 1.15) {
         UIRPG.State.addGameLog(s, `The fish escaped! You reeled too slowly.`, 'evasion');
       } else {
         catchFish(s, spot);
@@ -68,8 +69,8 @@ UIRPG.Fishing = (() => {
     }
 
     const yankChance = 0.003 * (dt / 16);
-    if (s.fishingTimer > effectiveCatchTime * 0.3 && Math.random() < yankChance) {
-      const yankAmount = effectiveCatchTime * (0.05 + Math.random() * 0.1);
+    if (s.fishingTimer > catchAt * 0.3 && Math.random() < yankChance) {
+      const yankAmount = catchAt * (0.05 + Math.random() * 0.1);
       s.fishingTimer = Math.max(0, s.fishingTimer - yankAmount);
       UIRPG.State.addGameLog(s, `Fish tugs the line...`, 'evasion');
     }
@@ -203,8 +204,9 @@ UIRPG.Fishing = (() => {
       p.hp = UIRPG.State.computeStats(s).maxHp;
       UIRPG.State.addGameLog(s, `Level up! You are now level ${p.level}! (+${B.STAT_POINTS_PER_LEVEL} stat points)`, 'reward');
       UIRPG.Events.emit('player:levelUp', { level: p.level, statPoints: B.STAT_POINTS_PER_LEVEL });
+      UIRPG.Actions.autoSpendStats(s);
     }
   }
 
-  return { startFishing, resolveTick, fishingPower, catchSpeedMult, treasureChanceBonus };
+  return { startFishing, resolveTick, fishingPower, catchProgressMult, treasureChanceBonus };
 })();

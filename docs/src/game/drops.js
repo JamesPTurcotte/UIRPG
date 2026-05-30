@@ -192,6 +192,17 @@ UIRPG.Drops = (() => {
     return `${b.label}+${val}`;
   }
 
+  function enchantCaps(rarity) {
+    return { Common: 1, Uncommon: 2, Rare: 3, Epic: 4, Legendary: Infinity, Unique: Infinity }[rarity] || 0;
+  }
+
+  function rollEnchants(item, rarity) {
+    const cap = enchantCaps(rarity);
+    let enchants = 0;
+    while (Math.random() < 0.5 && enchants < cap) enchants++;
+    for (let i = 0; i < enchants; i++) UIRPG.Actions.applyEnchant(item);
+  }
+
   function generateDrop(s) {
     const zone = UIRPG.Data.findZone(s.zone);
     const minLvl = zone ? zone.minLevel : 1;
@@ -201,7 +212,9 @@ UIRPG.Drops = (() => {
       const uid = s.currentEnemy.id;
       const template = UNIQUE_DROPS[uid];
       if (template && Math.random() < template.dropChance) {
-        return { ...template, id: genId(), enchants: 0, tier };
+        const item = { ...template, id: genId(), enchants: 0, tier };
+        rollEnchants(item, 'Unique');
+        return item;
       }
     }
     const th = theme(zone ? zone.id : 'forest');
@@ -228,6 +241,7 @@ UIRPG.Drops = (() => {
       bonusRoll(item, tier);
     }
 
+    rollEnchants(item, rarity.name);
     return item;
   }
 
@@ -444,7 +458,7 @@ UIRPG.Drops = (() => {
     const b = [];
     if (item.kind === 'fish') {
       if (item.healAmount) b.push(`Heal ${item.healAmount} HP`);
-      if (item.uses !== undefined) b.push(`${item.uses}/${item.maxUses || item.uses} uses`);
+      if (item.uses !== undefined) b.push(`${item.uses}/${item.maxUses || item.uses} bites`);
       return b;
     }
     for (const dk of UNIQUE_DISPLAY_KEYS) {

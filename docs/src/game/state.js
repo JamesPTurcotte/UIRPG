@@ -104,6 +104,7 @@ UIRPG.State = (() => {
       fishingTimer: 0,
       fishingCooldown: 0,
       fishCaught: 0,
+      autoStatMode: 'off',
       currencies: {},
       fishConsumeUses: 0,
     };

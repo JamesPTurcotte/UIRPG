@@ -61,10 +61,15 @@ UIRPG.Characters = (() => {
     state.characterId = id;
     state.characterMode = mode;
     
-    // Give player a starter sword
-    const starterSword = UIRPG.Drops.genStarterSword();
-    state.inventory.push(starterSword);
-    state.equipment.main_hand = starterSword;
+    // Give player a starter sword (equipped only, not duplicated in inv)
+    state.equipment.main_hand = UIRPG.Drops.genStarterSword();
+    
+    // Give player a starter fish (equipped)
+    state.equipment.fish = {
+      id: 'fish_starter_' + Date.now().toString(36),
+      kind: 'fish', baseName: 'Rotten Fish', rarity: 'Common', tier: 1,
+      healAmount: 5, uses: 1, maxUses: 1, enchants: 0,
+    };
     
     // Ironman characters don't use shared bank
     if (mode !== 'ironman') {

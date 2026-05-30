@@ -32,8 +32,8 @@ UIRPG.UI.Modal = (() => {
     }
     const html = `
       <div class="modal-title">◆ Choose Your Name</div>
-      <div style="margin-bottom:12px;color:var(--text-dim);font-size:11px;">What shall your adventurer be called?</div>
-      <input id="name-input" type="text" value="${esc(current)}" maxlength="20" style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:14px;">
+      <div style="margin-bottom:12px;color:var(--text-dim);font-size:var(--font-size);">What shall your adventurer be called?</div>
+      <input id="name-input" type="text" value="${esc(current)}" maxlength="20" style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:var(--font-size-xl);margin-bottom:14px;">
       <div class="modal-item" data-action="confirm-name" style="text-align:center;justify-content:center;color:var(--accent);font-weight:bold;">◆ Confirm</div>
     `;
     show(html);
@@ -49,7 +49,7 @@ UIRPG.UI.Modal = (() => {
   function openResetConfirm(s) {
     const html = `
       <div class="modal-title">◆ Reset Character</div>
-      <div style="margin-bottom:10px;color:var(--text-dim);font-size:11px;">
+      <div style="margin-bottom:10px;color:var(--text-dim);font-size:var(--font-size);">
         This will reset your character to level 1 and delete:
         <ul style="margin:8px 0;padding-left:20px;color:var(--danger);">
           <li>All inventory items</li>
@@ -82,12 +82,12 @@ UIRPG.UI.Modal = (() => {
     }
     const unlocked = s.inventory.filter(i => !i.locked);
     if (!unlocked.length) {
-      show('<div class="modal-title">◆ Salvage</div><div style="margin-bottom:12px;color:var(--text-dim);font-size:11px;">Nothing to salvage.</div><div class="close-hint" data-action="close-modal">close</div>');
+      show('<div class="modal-title">◆ Salvage</div><div style="margin-bottom:12px;color:var(--text-dim);font-size:var(--font-size);">Nothing to salvage.</div><div class="close-hint" data-action="close-modal">close</div>');
       return;
     }
     const html = `
       <div class="modal-title">◆ Salvage All Items?</div>
-      <div style="margin-bottom:10px;color:var(--text-dim);font-size:11px;">Turn <b style="color:var(--text);">${unlocked.length}</b> items into <b style="color:var(--accent);">${total} gold</b>?</div>
+      <div style="margin-bottom:10px;color:var(--text-dim);font-size:var(--font-size);">Turn <b style="color:var(--text);">${unlocked.length}</b> items into <b style="color:var(--accent);">${total} gold</b>?</div>
       <div style="display:flex;gap:8px;">
         <div class="modal-item" data-action="salvage-yes" style="flex:1;justify-content:center;color:var(--accent);font-weight:bold;">◆ Yes</div>
         <div class="modal-item" data-action="close-modal" style="flex:1;justify-content:center;">No</div>
@@ -121,9 +121,31 @@ UIRPG.UI.Modal = (() => {
           <span class="stat-name">Spread Evenly</span>
           <div class="stat-effects">• Distribute ${p.statPoints} points across all stats</div>
         </div>
-        <button class="stat-btn" data-action="spread-stats" style="font-size:12px;width:auto;padding:0 10px;">⟳</button>
+        <button class="stat-btn" data-action="spread-stats" style="font-size:var(--font-size-lg);width:auto;padding:0 10px;">⟳</button>
       </div>`;
     }
+
+    // Auto-spend mode toggle
+    const modes = [
+      { id: 'off', label: 'Manual' },
+      { id: 'round_robin', label: 'Cycle' },
+      { id: 'str', label: 'STR' },
+      { id: 'dex', label: 'DEX' },
+      { id: 'luck', label: 'LCK' },
+      { id: 'vit', label: 'VIT' },
+    ];
+    const currentMode = s.autoStatMode || 'off';
+    html += `<div class="stat-row" style="margin-bottom:10px;padding:4px 6px;">
+      <div class="stat-info">
+        <span class="stat-name">Auto-Spend</span>
+        <div class="stat-effects">• Auto-allocate points on level up</div>
+      </div>
+      <div style="display:flex;gap:3px;flex-wrap:wrap;flex:1;justify-content:flex-end;">`;
+    modes.forEach(m => {
+      const active = currentMode === m.id ? ' color:var(--accent);border-color:var(--accent);' : ' color:var(--text-dim);border-color:transparent;';
+      html += `<span data-action="set-auto-stat" data-value="${m.id}" style="cursor:pointer;padding:1px 5px;font-size:var(--font-size-sm);border:1px solid;border-radius:1px;background:none;font-family:inherit;${active}">${m.label}</span>`;
+    });
+    html += `</div></div>`;
 
     const stats = [
       { id: 'str', label: 'STR', val: p.str, eff: eStr,
@@ -175,7 +197,7 @@ UIRPG.UI.Modal = (() => {
           <div class="stat-effects">• Cost: ${resetCost}g (level ${p.level} × ${B.RESET_COST_PER_LEVEL})</div>
           <div class="stat-effects">• You have: ${p.gold}g</div>
         </div>
-        <button class="stat-btn" data-action="reset-stats" ${canReset ? '' : 'disabled'} style="font-size:12px;width:auto;padding:0 10px;">Reset</button>
+        <button class="stat-btn" data-action="reset-stats" ${canReset ? '' : 'disabled'} style="font-size:var(--font-size-lg);width:auto;padding:0 10px;">Reset</button>
       </div>`;
     }
 
@@ -192,8 +214,8 @@ UIRPG.UI.Modal = (() => {
         const marker = info.active ? ' <span class="active-marker">◀</span>' : '';
         const enemiesList = z.enemies.map(e => `${e.name} (HP:${e.hp} ATK:${e.atk} DEF:${e.def} XP:${e.xp} G:${e.gold})`).join(', ');
         html += `<div class="modal-item" data-action="change-zone" data-zone="${z.name}">
-          <span>${z.name}${marker} <span class="locked" style="font-size:9px;">lvl ${z.minLevel}+</span></span>
-          <span class="locked" style="font-size:9px;max-width:180px;text-align:right;">${enemiesList}</span>
+          <span>${z.name}${marker} <span class="locked" style="font-size:var(--font-size-sm);">lvl ${z.minLevel}+</span></span>
+          <span class="locked" style="font-size:var(--font-size-sm);max-width:180px;text-align:right;">${enemiesList}</span>
         </div>`;
       } else {
         html += `<div class="modal-item disabled">${z.name} <span class="locked">(level ${z.minLevel}+)</span></div>`;
@@ -213,7 +235,7 @@ UIRPG.UI.Modal = (() => {
 
     const html = `
       <div class="modal-title">◆ Offline Progress</div>
-      <div style="margin-bottom:10px;color:var(--text-dim);font-size:11px;">You were away for <b style="color:var(--text);">${esc(timeLabel)}</b></div>
+      <div style="margin-bottom:10px;color:var(--text-dim);font-size:var(--font-size);">You were away for <b style="color:var(--text);">${esc(timeLabel)}</b></div>
       <div style="display:flex;flex-direction:column;gap:4px;padding:8px 0;">
         <div class="craft-stat"><span>XP Earned</span><span style="color:var(--accent);">${esc(xpLabel)}</span></div>
         <div class="craft-stat"><span>Gold Earned</span><span style="color:var(--accent);">${esc(goldLabel)}</span></div>
@@ -239,16 +261,16 @@ UIRPG.UI.Modal = (() => {
     let html = '<div class="modal-title">◆ Select Character</div>';
     
     if (characters.length === 0) {
-      html += '<div style="margin-bottom:10px;color:var(--text-dim);font-size:11px;">No characters found. Create one to begin!</div>';
+      html += '<div style="margin-bottom:10px;color:var(--text-dim);font-size:var(--font-size);">No characters found. Create one to begin!</div>';
     } else {
       characters.forEach(char => {
         const modeLabel = char.mode === 'ironman' ? ' [Ironman]' : char.mode === 'hardcore' ? ' [Hardcore]' : '';
         const lastPlayed = new Date(char.lastPlayed).toLocaleDateString();
         html += `
           <div class="modal-item" data-action="select-character" data-id="${char.id}" style="position:relative;">
-            <span>${esc(char.name)}${modeLabel} <span class="locked" style="font-size:9px;">Lvl ${char.level}</span></span>
-            <span class="locked" style="font-size:9px;">Last: ${lastPlayed}</span>
-            <span class="delete-character-btn" data-action="delete-character" data-id="${char.id}" data-name="${esc(char.name)}" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--danger);cursor:pointer;font-size:16px;padding:4px 8px;">✕</span>
+            <span>${esc(char.name)}${modeLabel} <span class="locked" style="font-size:var(--font-size-sm);">Lvl ${char.level}</span></span>
+            <span class="locked" style="font-size:var(--font-size-sm);">Last: ${lastPlayed}</span>
+            <span class="delete-character-btn" data-action="delete-character" data-id="${char.id}" data-name="${esc(char.name)}" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--danger);cursor:pointer;font-size:var(--font-size-btn);padding:4px 8px;">✕</span>
           </div>
         `;
       });
@@ -261,7 +283,7 @@ UIRPG.UI.Modal = (() => {
         </div>
       </div>
       <div style="margin-top:12px;text-align:center;">
-        <a href="privacy.html" target="_blank" style="color:var(--text-dim);font-size:9px;text-decoration:none;">Privacy</a>
+        <a href="privacy.html" target="_blank" style="color:var(--text-dim);font-size:var(--font-size-sm);text-decoration:none;">Privacy</a>
       </div>
     `;
 
@@ -297,7 +319,7 @@ UIRPG.UI.Modal = (() => {
   function openDeleteConfirm(charId, charName, onSelect) {
     const html = `
       <div class="modal-title">◆ Delete Character</div>
-      <div style="margin-bottom:10px;color:var(--text-dim);font-size:11px;">
+      <div style="margin-bottom:10px;color:var(--text-dim);font-size:var(--font-size);">
         Are you sure you want to delete <b style="color:var(--danger);">${esc(charName)}</b>?
         <br><br>
         <b style="color:var(--danger);">This cannot be undone!</b> All progress, inventory, and equipment will be permanently lost.
@@ -323,24 +345,24 @@ UIRPG.UI.Modal = (() => {
   function openCreateCharacter(onSelect) {
     const html = `
       <div class="modal-title">◆ Create Character</div>
-      <div style="margin-bottom:12px;color:var(--text-dim);font-size:11px;">Choose a name and mode for your character.</div>
-      <input id="char-name-input" type="text" placeholder="Character Name" maxlength="20" style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:14px;">
+      <div style="margin-bottom:12px;color:var(--text-dim);font-size:var(--font-size);">Choose a name and mode for your character.</div>
+      <input id="char-name-input" type="text" placeholder="Character Name" maxlength="20" style="width:100%;padding:6px 8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:var(--font-size-xl);margin-bottom:14px;">
       
       <div style="margin-bottom:12px;">
         <label style="display:block;margin-bottom:8px;">
           <input type="radio" name="char-mode" value="normal" checked style="margin-right:6px;">
           <span style="color:var(--text);">Normal</span>
-          <span style="color:var(--text-dim);font-size:10px;margin-left:6px;">Shared bank with other characters</span>
+          <span style="color:var(--text-dim);font-size:var(--font-size);margin-left:6px;">Shared bank with other characters</span>
         </label>
         <label style="display:block;margin-bottom:8px;">
           <input type="radio" name="char-mode" value="ironman" style="margin-right:6px;">
           <span style="color:var(--text);">Ironman</span>
-          <span style="color:var(--text-dim);font-size:10px;margin-left:6px;">No shared bank, solo play only</span>
+          <span style="color:var(--text-dim);font-size:var(--font-size);margin-left:6px;">No shared bank, solo play only</span>
         </label>
         <label style="display:block;margin-bottom:8px;">
           <input type="radio" name="char-mode" value="hardcore" style="margin-right:6px;">
           <span style="color:var(--danger);">Hardcore</span>
-          <span style="color:var(--text-dim);font-size:10px;margin-left:6px;">Death deletes character!</span>
+          <span style="color:var(--text-dim);font-size:var(--font-size);margin-left:6px;">Death deletes character!</span>
         </label>
       </div>
 

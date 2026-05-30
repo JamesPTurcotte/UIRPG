@@ -172,6 +172,9 @@
     if (unsubAutoEquip) unsubAutoEquip();
 
     unsubHardcore = UIRPG.Events.on('player:hardcoreDeath', () => {
+      if (frameId) cancelAnimationFrame(frameId);
+      frameId = null;
+      state = null;
       UIRPG.UI.Modal.openCharacterSelect(loadAndStartCharacter);
     });
 
@@ -192,6 +195,7 @@
   }
 
   function loop(now) {
+    if (!state) return;
     const dt = Math.min(now - lastTime, 100);
     lastTime = now;
 
@@ -207,6 +211,7 @@
   }
 
   function render() {
+    if (!state) return;
     UIRPG.UI.Render.all();
   }
 
@@ -253,7 +258,7 @@
       const menu = document.getElementById('zone-dropdown-menu');
       if (menu) {
         menu.innerHTML =
-          `<div class="dropdown-item" data-action="fight-select-zones">Zones <span class="locked" style="font-size:9px;">[${UIRPG.Utils.esc(state.zone)}]</span></div>` +
+          `<div class="dropdown-item" data-action="fight-select-zones">Zones <span class="locked" style="font-size:var(--font-size-sm);">[${UIRPG.Utils.esc(state.zone)}]</span></div>` +
           `<div class="dropdown-item">Dungeon</div>`;
         showMenu(menu);
       }
@@ -274,7 +279,7 @@
       const menu = document.getElementById('zone-dropdown-menu');
       if (menu) {
         menu.innerHTML =
-          `<div class="dropdown-item" data-action="fight-select-zones">Zones <span class="locked" style="font-size:9px;">[${UIRPG.Utils.esc(state.zone)}]</span></div>` +
+          `<div class="dropdown-item" data-action="fight-select-zones">Zones <span class="locked" style="font-size:var(--font-size-sm);">[${UIRPG.Utils.esc(state.zone)}]</span></div>` +
           `<div class="dropdown-item">Dungeon</div>`;
         showMenu(menu);
       }
@@ -379,6 +384,10 @@
         UIRPG.Actions.toggleEquipLock(state, slot);
         saveAndRender();
       }
+    } else if (action === 'set-auto-stat') {
+      state.autoStatMode = el.dataset.value;
+      saveAndRender();
+      UIRPG.UI.Modal.openStats(state);
     } else if (action === 'settings') {
       UIRPG.UI.Settings.open(state);
     } else if (action === 'export-save') {
@@ -425,13 +434,19 @@
 
   function onDragOver(e) {
     document.querySelectorAll('.drag-over, .drag-over-tab').forEach(el => el.classList.remove('drag-over', 'drag-over-tab'));
-    const slot = e.target.closest('.equip-slot, #inventory-list, [data-tab]');
+    const tab = e.target.closest('[data-tab]');
+    const slot = e.target.closest('.equip-slot');
+    const overInventory = e.target.closest('#inventory-list');
+    if (overInventory) {
+      e.preventDefault();
+    }
+    if (tab) {
+      e.preventDefault();
+      tab.classList.add('drag-over', 'drag-over-tab');
+    }
     if (slot) {
       e.preventDefault();
       slot.classList.add('drag-over');
-      if (slot.dataset && slot.dataset.tab) {
-        slot.classList.add('drag-over-tab');
-      }
     }
   }
 

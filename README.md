@@ -119,13 +119,13 @@ Methods: changeZone, equipItem, allocateStat, spreadStats, resetStats, salvageAl
 ### `UIRPG.Fishing` (`fishing.js`)
 ```
 Methods: startFishing(s, spotId), resolveTick(s, dt), fishingPower(s),
-         catchSpeedMult(s), treasureChanceBonus(s)
+         catchProgressMult(s), treasureChanceBonus(s)
 ```
-**Catch speed:** `catchTime × (1 - (fishingPower × 0.2 + catchSpeed) / 100)` — higher fishing power now directly speeds up fishing. With FP 200 and no gear, time is reduced by 40%.
+**Catch speed:** Fishing power now speeds up the **timer accumulation rate**, not the max timer. The cast bar always shows `X / spot.catchTime` but higher FP fills it faster. Rate = `dt × (1 + (fishingPower × 0.2 + catchSpeed) / 100)`.
 
 **Catch flow:**
-1. **Cooldown** after each catch/escape: `fishingTimer` is frozen and `fishingCooldown` counts down (800-2300ms based on spot's highest fish rarity). UI shows `"Waiting: Xms"`.
-2. Timer accumulates toward `catchTime × catchSpeedMult`
+1. **Cooldown** after each catch/escape: `fishingTimer` is frozen and `fishingCooldown` counts down (800-2300ms based on spot's highest fish rarity). UI shows `"Anticipating: Xms"`.
+2. Timer accumulates at a rate multiplied by fishing power and catch speed gear
 3. Random yank chance (0.3%/tick, starts at 30% progress): timer jumps backward 5-15%
 4. If timer exceeds catch time by >15%: fish escapes
 4. Otherwise: roll 60% fish, 15% rod (tiered by spot), 15% treasure, 10% nothing
@@ -154,7 +154,13 @@ Spot unlocks require both `player.level >= minLevel` AND `fishingPower >= minFis
 
 **Fishing power formula:** `1 + (level-1) × 3 + rodFP + baitFP + bonusFP`. Luck no longer contributes to fishing power (pure gear and level progression).
 
-**Fish as consumable:** Equipped in `fish` slot. Uses reset per combat. Auto-eats when `HP + healAmount ≤ maxHp` (no waste). End of fight consumes remaining uses for full heal. Unequipping resets to max uses.
+**Fish as consumable:** Equipped in `fish` slot. Uses (shown as "bites") reset per combat. Auto-eats when `HP + healAmount ≤ maxHp` (no waste). End of fight consumes remaining bites for full heal. Unequipping resets to max uses.
+
+**Starter fish:** New characters start with a Rotten Fish (5 HP, 1 use) equipped in the fish slot.
+
+**Auto-spend stat points:** The Stats modal (`openStats`) has an Auto-Spend toggle: Manual (default), Cycle (round-robin), or dump all into a single stat (STR/DEX/LCK/VIT). When set, points are automatically allocated on every level up. The title bar shows "Auto: ON" instead of "0 pts" when auto-spend is active and all points are spent.
+
+**Enchanted drops:** Items from combat have a 20% chance to drop already enchanted. Each enchant level past the first has a 50% cumulative chance (20% → 1 enchant, 10% → 2 enchants, 5% → 3, etc.). No maximum enchant level.
 
 ### `UIRPG.Drops` (`drops.js`)
 ```
@@ -740,12 +746,72 @@ These rules apply universally: inventory filters, equipment slots, combat logs, 
 
 ---
 
+## Drag-and-Drop Highlighting (Critical Pattern)
+
+The inventory/Bank tab highlight during drag-and-drop requires a specific pattern that must be followed for any new droppable UI element.
+
+### The Problem
+
+Elements created via `innerHTML` assignment inside `renderInventory` are **destroyed and recreated every game frame** (~60fps). Any CSS class added to them by drag events (`.drag-over-tab`) is erased ~16ms later when the next render replaces the innerHTML. The class never survives long enough to be visible.
+
+### The Solution
+
+**Step 1: Persistent HTML elements.** Droppable tab targets must be hardcoded in `index.html` so they survive across renders:
+
+```html
+<div id="inv-toolbar">
+  <div class="inv-tab-wrap" data-tab="inv"><span class="inv-tab">Inv</span></div>
+  <div class="inv-tab-wrap" data-tab="bank"><span class="inv-tab">Bank</span></div>
+  ...
+  <div id="inv-filters-container"></div>  <!-- only this gets rebuilt -->
+</div>
+```
+
+**Step 2: Mutate, don't rebuild.** In `renderInventory`, never replace the toolbar's `innerHTML`. Instead, mutate `className` on the existing persistent children:
+
+```js
+// ❌ Wrong — destroys and recreates every frame:
+$('inv-toolbar').innerHTML = tbHtml;
+
+// ✅ Correct — only updates className on persistent elements:
+document.querySelector('[data-tab="inv"] > .inv-tab').className = tabCls('inv');
+document.querySelector('[data-tab="bank"] > .inv-tab').className = tabCls('bank');
+```
+
+**Step 3: Rebuild only the volatile content.** The filter buttons change every render and are the only content that needs `innerHTML`:
+
+```js
+const fc = document.getElementById('inv-filters-container');
+if (fc) fc.innerHTML = fHtml;  // filters rebuild, tabs survive
+```
+
+**Step 4: Wrapper div for the highlight.** Each tab span is wrapped in a `<div class="inv-tab-wrap">` that carries the `data-tab` attribute. The `.drag-over-tab` class is applied to this wrapper, not the span:
+
+```css
+.inv-tab-wrap.drag-over-tab {
+  border-color: var(--accent) !important;
+  background: rgba(0, 170, 119, 0.3) !important;
+}
+```
+
+Using `border-color` instead of `outline` avoids clipping by scroll containers (`overflow: auto`).
+
+### Checklist for new droppable UI elements
+
+1. Hardcode the element in `index.html` — never create it in a render function
+2. Use `querySelector` + `className` mutation, not `innerHTML` replacement
+3. Put the `data-action` / `data-tab` attribute on a wrapper div, not the span
+4. Use `border-color` for highlight styling (not `outline`)
+5. Add the wrapper class to `onDragOver` in `main.js`
+
+---
+
 ## CSS Design System
 
 All tokens in `:root`:
 
 | Variable | Usage |
-|---|---|
+|---|---|---|
 | `--bg-primary` | `#0d0d0d` — page background |
 | `--bg-secondary` | `#131313` — panel backgrounds |
 | `--border` | `#2a2a2a` — borders |
@@ -754,11 +820,22 @@ All tokens in `:root`:
 | `--danger` | `#cc4444` — damage, death, deletion |
 | `--warn` | `#ccaa33` — warnings, gold icon |
 | `--evasion` | `#6699cc` — dodge/miss messages |
-
-**Dodge cap:** `dodgeChance` from items is capped at 60% in `computeStats`.
 | `--rarity-*` | Color per rarity tier |
 | `--z-modal` | `100` — modal/dropdown z-index |
 | `--z-splitter` | `50` — layout splitters |
+
+**Font sizes (standardized tokens):**
+
+| Token | Size | Usage |
+|---|---|---|
+| `--font-size-xs` | 8px | Tiny labels, dot fillers, compare stat values |
+| `--font-size-sm` | 9px | Small labels, locked indicators, compare tooltips, sub-section headers |
+| `--font-size` | 10px | **Base** — body text, panel content, stats, action bar buttons |
+| `--font-size-lg` | 12px | Modal item rows, stat buttons (spread/reset) |
+| `--font-size-xl` | 13px | Stat names, stat values, modal titles, input fields, character delete |
+| `--font-size-btn` | 16px | Large action buttons (`+`, `✕` delete) |
+
+All `font-size` values across CSS and inline styles use these variables. Tune the entire UI's text size by changing `--font-size` in `:root`.
 
 ---
 

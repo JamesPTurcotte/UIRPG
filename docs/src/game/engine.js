@@ -227,6 +227,7 @@ UIRPG.Engine = (() => {
       leveled = true;
       UIRPG.State.addGameLog(s, `Level up! You are now level ${p.level}! (+${B.STAT_POINTS_PER_LEVEL} stat points)`, 'reward');
       UIRPG.Events.emit('player:levelUp', { level: p.level, statPoints: B.STAT_POINTS_PER_LEVEL });
+      UIRPG.Actions.autoSpendStats(s);
     }
     if (leveled && p.statPoints > 0) {
       UIRPG.Events.emit('player:unspentStats', { points: p.statPoints });

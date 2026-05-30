@@ -8,7 +8,7 @@ UIRPG.UI.Settings = (() => {
     const isSignedIn = drive && drive.isSignedIn && drive.isSignedIn();
 
     const errorHtml = error
-      ? `<div style="margin-bottom:10px;padding:6px 8px;background:rgba(204,68,68,0.15);border:1px solid var(--danger);color:var(--danger);font-size:10px;border-radius:2px;">${esc(error)}</div>`
+      ? `<div style="margin-bottom:10px;padding:6px 8px;background:rgba(204,68,68,0.15);border:1px solid var(--danger);color:var(--danger);font-size:var(--font-size);border-radius:2px;">${esc(error)}</div>`
       : '';
 
     let cloudSection;
@@ -17,14 +17,14 @@ UIRPG.UI.Settings = (() => {
       const syncLabel = lastSync ? `Last synced: ${formatAgo(lastSync)}` : '';
       cloudSection = `
         <div style="margin-bottom:4px;color:var(--text);">✓ Signed in</div>
-        ${syncLabel ? `<div style="margin-bottom:10px;color:var(--text-dim);font-size:10px;">${syncLabel}</div>` : ''}
+        ${syncLabel ? `<div style="margin-bottom:10px;color:var(--text-dim);font-size:var(--font-size);">${syncLabel}</div>` : ''}
         <div style="display:flex;gap:8px;">
           <div class="modal-item" data-action="sync-now" style="flex:1;justify-content:center;color:var(--accent);font-weight:bold;">◆ Sync Now</div>
           <div class="modal-item" data-action="cloud-sign-out" style="flex:1;justify-content:center;color:var(--danger);">Sign Out</div>
         </div>`;
     } else {
       cloudSection = `
-        <div class="modal-item" data-action="cloud-sign-in" style="justify-content:center;padding:8px 12px;display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #dcdcdc;border-radius:2px;color:#555;font-weight:500;font-family:Roboto,Helvetica,Arial,sans-serif;font-size:13px;cursor:pointer;">
+        <div class="modal-item" data-action="cloud-sign-in" style="justify-content:center;padding:8px 12px;display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #dcdcdc;border-radius:2px;color:#555;font-weight:500;font-family:Roboto,Helvetica,Arial,sans-serif;font-size:var(--font-size-xl);cursor:pointer;">
           ${GOOGLE_SVG}
           <span style="flex:1;text-align:center;">Sign in with Google</span>
         </div>`;
@@ -35,17 +35,17 @@ UIRPG.UI.Settings = (() => {
 
       ${errorHtml}
 
-      <div style="margin-bottom:6px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:9px;">Local Saves</div>
+      <div style="margin-bottom:6px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:var(--font-size-sm);">Local Saves</div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <div class="modal-item" data-action="export-save" style="flex:1;justify-content:center;color:var(--text);">Export Save</div>
         <div class="modal-item" data-action="import-save" style="flex:1;justify-content:center;color:var(--text);">Import Save</div>
       </div>
 
-      <div style="margin-bottom:6px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:9px;">Cloud Save</div>
+      <div style="margin-bottom:6px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:var(--font-size-sm);">Cloud Save</div>
       ${cloudSection}
 
       <div style="margin-top:16px;text-align:center;">
-        <a href="privacy.html" target="_blank" style="color:var(--text-dim);font-size:9px;text-decoration:none;">Privacy</a>
+        <a href="privacy.html" target="_blank" style="color:var(--text-dim);font-size:var(--font-size-sm);text-decoration:none;">Privacy</a>
       </div>
       <div class="close-hint" data-action="close-modal" style="margin-top:4px;">done</div>
     `;

@@ -134,7 +134,7 @@ UIRPG.UI.Render = (() => {
     const accDisplay = hitPct !== null ? `${stats.accuracyRating} (${hitPct}%)` : `${stats.accuracyRating}`;
 
     const playerRows = [
-      ['HEAL', s.fishConsumeUses > 0 ? `${s.fishConsumeUses} uses` : '--'],
+      ['HEAL', s.fishConsumeUses > 0 && s.equipment.fish ? `${Math.max(0, s.fishConsumeUses * (s.equipment.fish.healAmount || 10))} HP in ${s.fishConsumeUses} bites` : '--'],
       ['ATK', `${stats.atkDmg}`],
       ['AS', `${stats.attackSpeed}ms`],
       ['ARM', armDisplay],
@@ -142,7 +142,7 @@ UIRPG.UI.Render = (() => {
       ['DODGE', `${stats.dodgeChance > 0 ? stats.dodgeChance + '%' : '0%'}`],
       ['BLOCK', `${stats.flatBlock > 0 ? stats.flatBlock : '0'}`],
       ['ACC', accDisplay],
-      ['CRIT', `${Math.round(stats.critChance)}% / +${Math.round((stats.critDmgBonus || UIRPG.State.BALANCE.BASE_CRIT_MULT - 1) * 100)}% CDmg`],
+      ['CRIT', `${Math.round(stats.critChance)}% / +${Math.round((UIRPG.State.BALANCE.BASE_CRIT_MULT - 1 + (stats.critDmgBonus || 0)) * 100)}% CDmg`],
       ['XP', `+${Math.round((stats.xpMult - 1) * 100)}%`],
       ['GF', `+${Math.round((stats.goldMult - 1) * 100)}%`],
       ['SPD', `${Math.round(stats.monsterFindSpeed * 100)}%`],
@@ -227,15 +227,14 @@ UIRPG.UI.Render = (() => {
       enemyNameEl.textContent = spot.name;
       enemyHpText.textContent = '';
 
-      const catchMult = UIRPG.Fishing.catchSpeedMult(s);
-      const effectiveCatchTime = spot.catchTime * catchMult;
-      const pct = Math.min(100, Math.max(0, (s.fishingTimer || 0) / effectiveCatchTime * 100));
+      const catchAt = spot.catchTime;
+      const pct = Math.min(100, Math.max(0, (s.fishingTimer || 0) / catchAt * 100));
       castBarContainer.classList.remove('hidden');
       castBar.style.width = `${pct}%`;
 
       const fishList = spot.fish.map(f => `${f.name}`).join(', ');
-      let castLine = `Cast: ${Math.round(s.fishingTimer || 0)}/${Math.round(effectiveCatchTime)}ms`;
-      if (s.fishingCooldown > 0) castLine = `Waiting: ${Math.ceil(s.fishingCooldown)}ms`;
+      let castLine = `Cast: ${Math.round(s.fishingTimer || 0)}/${catchAt}ms`;
+      if (s.fishingCooldown > 0) castLine = `Anticipating: ${Math.ceil(s.fishingCooldown)}ms`;
       spotInfo.innerHTML = `<div class="bl">Fish: ${fishList}</div><div class="bl">${castLine}</div>`;
       spotInfo.classList.remove('hidden');
     } else {
@@ -293,22 +292,32 @@ UIRPG.UI.Render = (() => {
     }
 
     const tabCls = (t) => 'inv-tab' + (s.activeTab === t ? ' active' : '');
-    let tbHtml = `<span class="${tabCls('inv')}" data-tab="inv">Inv</span><span class="${tabCls('bank')}" data-tab="bank">Bank</span>`;
 
-    if (s.activeTab === 'bank') {
-      tbHtml += `<span class="tb-sep"></span><span class="${tabCls('items')}" data-tab="items">Items</span><span class="${tabCls('currencies')}" data-tab="currencies">Currencies</span>`;
+    // Update tab classes and visibility (elements persist in HTML, not rebuilt)
+    document.querySelector('[data-tab="inv"] > .inv-tab').className = tabCls('inv');
+    document.querySelector('[data-tab="bank"] > .inv-tab').className = tabCls('bank');
+    const itemsWrap = document.querySelector('[data-tab="items"]');
+    const currenciesWrap = document.querySelector('[data-tab="currencies"]');
+    if (itemsWrap) {
+      itemsWrap.style.display = s.activeTab === 'bank' ? '' : 'none';
+      if (s.activeTab === 'bank') itemsWrap.querySelector('.inv-tab').className = tabCls('items');
+    }
+    if (currenciesWrap) {
+      currenciesWrap.style.display = s.activeTab === 'bank' ? '' : 'none';
+      if (s.activeTab === 'bank') currenciesWrap.querySelector('.inv-tab').className = tabCls('currencies');
     }
 
+    // Only rebuild the filters container
     const activeFilter = s.inventoryFilter || 'all';
-    tbHtml += '<span class="tb-sep"></span><div class="inv-filters">';
     const filters = ['all', 'main_hand', 'off_hand', 'helmet', 'chest', 'leggings', 'boots', 'gloves', 'ring', 'belt', 'amulet', 'rod', 'bait', 'fish'];
+    let fHtml = '';
     for (const f of filters) {
       const label = FILTER_MAP[f] || f.charAt(0).toUpperCase() + f.slice(1);
       const cls = f === activeFilter ? 'inv-filter active' : 'inv-filter';
-      tbHtml += `<button type="button" class="${cls}" data-filter="${f}">${label}</button>`;
+      fHtml += `<button type="button" class="${cls}" data-filter="${f}">${label}</button>`;
     }
-    tbHtml += '</div>';
-    $('inv-toolbar').innerHTML = tbHtml;
+    const fc = document.getElementById('inv-filters-container');
+    if (fc) fc.innerHTML = fHtml;
 
     const autoEl = document.getElementById('inv-auto');
     if (autoEl) {
@@ -385,7 +394,9 @@ UIRPG.UI.Render = (() => {
 
     const ue = $('unspent-stats');
     const sp = p.statPoints;
-    ue.textContent = sp > 0 ? `${sp} unspent!` : `0 pts`;
+    const auto = s.autoStatMode && s.autoStatMode !== 'off';
+    if (auto && sp === 0) ue.textContent = 'Auto: ON';
+    else ue.textContent = sp > 0 ? `${sp} unspent!` : `0 pts`;
     ue.className = 'unspent visible';
 
     $('hp-text').textContent = `${Math.max(0, p.hp)}/${UIRPG.State.computeStats(s).maxHp}`;

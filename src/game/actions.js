@@ -88,6 +88,33 @@ UIRPG.Actions = (() => {
     return true;
   }
 
+  const AUTO_MODE_NAMES = { round_robin: 'Cycle', str: 'STR', dex: 'DEX', luck: 'LCK', vit: 'VIT' };
+
+  function autoSpendStats(s) {
+    const mode = s.autoStatMode || 'off';
+    if (mode === 'off') return false;
+    const p = s.player;
+    if (p.statPoints <= 0) return false;
+    const cycle = mode === 'round_robin' ? ['str', 'dex', 'luck', 'vit'] : [mode];
+    let spent = 0;
+    while (p.statPoints > 0) {
+      for (const stat of cycle) {
+        if (p.statPoints <= 0) break;
+        p[stat] += 1;
+        p.statPoints -= 1;
+        spent++;
+      }
+    }
+    if (spent > 0) {
+      const modeName = AUTO_MODE_NAMES[s.autoStatMode] || s.autoStatMode;
+      UIRPG.State.addGameLog(s, `Auto-spent ${spent} stat point${spent > 1 ? 's' : ''} (${modeName}).`, 'info');
+      const stats = UIRPG.State.computeStats(s);
+      if (p.hp > stats.maxHp) p.hp = stats.maxHp;
+      UIRPG.Events.emit('stats:changed', { remaining: p.statPoints });
+    }
+    return true;
+  }
+
   function resetStats(s) {
     const p = s.player;
     const totalSpent = (p.str - 5) + (p.dex - 5) + (p.luck - 5) + (p.vit - 5);
@@ -343,6 +370,7 @@ UIRPG.Actions = (() => {
     s.gameLog = fresh.gameLog;
     s.equipLocks = {};
     s.autoEquipEnabled = false;
+    s.autoStatMode = 'off';
     s.activity = 'fight';
     s.fishingSpot = null;
     s.fishingTimer = 0;
@@ -610,5 +638,6 @@ UIRPG.Actions = (() => {
     enchantEquipped, unequipItem, upgradeInventory, upgradeBank, resetCharacter,
     switchTab, moveToBank, moveToInventory, toggleLock,
     setFilter, setAutoSalvage, setAutoEquip, autoSalvageValue, shouldAutoSalvage, enchantCost,
-    toggleEquipLock, autoEquip, setActivity, changeFishingSpot, tryEquipDrop, handleDrop };
+    toggleEquipLock, autoEquip, setActivity, changeFishingSpot, tryEquipDrop, handleDrop,
+    autoSpendStats, applyEnchant };
 })();

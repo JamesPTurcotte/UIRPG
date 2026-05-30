@@ -70,7 +70,15 @@
 
     <section id="inventory-panel" aria-label="Inventory">
       <div class="panel-header"><span id="panel-title">Inventory</span><span class="header-actions"><span id="inv-auto" class="inv-auto" role="button" tabindex="0">[Auto: Off]</span><span class="salvage-btn" data-action="salvage" role="button" tabindex="0">[Salvage All]</span></span></div>
-      <div id="inv-toolbar"></div>
+      <div id="inv-toolbar">
+        <div class="inv-tab-wrap" data-tab="inv"><span class="inv-tab active">Inv</span></div>
+        <div class="inv-tab-wrap" data-tab="bank"><span class="inv-tab">Bank</span></div>
+        <span class="tb-sep"></span>
+        <div class="inv-tab-wrap" data-tab="items" style="display:none"><span class="inv-tab">Items</span></div>
+        <div class="inv-tab-wrap" data-tab="currencies" style="display:none"><span class="inv-tab">Currencies</span></div>
+        <span class="tb-sep"></span>
+        <div id="inv-filters-container" class="inv-filters"></div>
+      </div>
       <div id="inventory-list"><div class="empty-text">empty</div></div>
       <div id="currency-list" class="hidden"></div>
     </section>
