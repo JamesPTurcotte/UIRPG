@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0d0d0d">
   <title>UIRPG</title>
   <link rel="stylesheet" href="src/styles.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <noscript>This game requires JavaScript to run.</noscript>
@@ -16,6 +17,7 @@
     <section id="action-square" aria-label="Actions">
       <div id="action-top">
         <h1 class="title">◆ UIRPG</h1>
+        <span id="settings-btn" class="settings-btn" data-action="settings" role="button" tabindex="0" title="Settings">⚙</span>
         <span id="player-name" class="player-name">Adventurer</span>
         <span class="stat">LVL <span id="level">1</span></span>
         <span class="stat gold">◆ <span id="gold">0</span></span>
@@ -106,11 +108,16 @@
   <script src="src/game/characters.js"></script>
   <script src="src/save/migrator.js"></script>
   <script src="src/save/storage.js"></script>
+  <script src="src/save/local.js"></script>
+  <script src="src/save/drive.js"></script>
+  <script src="src/save/sync.js"></script>
   <script src="src/ui/modal.js"></script>
   <script src="src/ui/render.js"></script>
   <script src="src/ui/surface.js"></script>
   <script src="src/ui/crafting.js"></script>
   <script src="src/ui/layout.js"></script>
+  <script src="src/config.js"></script>
+  <script src="src/ui/settings.js"></script>
   <script src="src/main.js"></script>
 </body>
 </html>

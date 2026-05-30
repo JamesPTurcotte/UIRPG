@@ -30,7 +30,10 @@
       });
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
-          if (state) state.saveTime = Date.now();
+          if (state) {
+            state.saveTime = Date.now();
+            UIRPG.Sync.syncOnClose(state);
+          }
         } else {
           const now = Date.now();
           const elapsed = now - (state?.saveTime || now);
@@ -62,6 +65,17 @@
     }
 
     window.__state = state;
+
+    // Auto-restore Drive session + check for newer saves
+    if (UIRPG.Drive.init()) {
+      UIRPG.Sync.downloadAll(state).then(merged => {
+        if (merged) {
+          state.saveTime = Date.now();
+          UIRPG.Save.save(state);
+          render();
+        }
+      });
+    }
 
     const now = Date.now();
     const elapsed = state.saveTime ? now - state.saveTime : 0;
@@ -365,6 +379,38 @@
         UIRPG.Actions.toggleEquipLock(state, slot);
         saveAndRender();
       }
+    } else if (action === 'settings') {
+      UIRPG.UI.Settings.open(state);
+    } else if (action === 'export-save') {
+      UIRPG.LocalFile.exportSave(state);
+    } else if (action === 'import-save') {
+      UIRPG.LocalFile.importSave(imported => {
+        Object.assign(state, imported);
+        state.saveTime = Date.now();
+        UIRPG.Save.save(state);
+        UIRPG.UI.Modal.close();
+        UIRPG.UI.Render.all();
+      });
+    } else if (action === 'cloud-sign-in') {
+      UIRPG.Drive.signIn().then(() => {
+        UIRPG.UI.Modal.close();
+        UIRPG.UI.Settings.open(state);
+        saveAndRender();
+      }).catch((err) => {
+        UIRPG.UI.Modal.close();
+        UIRPG.UI.Settings.open(state);
+        if (err.message) console.warn('Sign-in error:', err.message);
+      });
+    } else if (action === 'cloud-sign-out') {
+      UIRPG.Drive.signOut();
+      UIRPG.UI.Modal.close();
+      saveAndRender();
+    } else if (action === 'sync-now') {
+      UIRPG.Sync.uploadAll(state).then(() => {
+        UIRPG.UI.Modal.close();
+        UIRPG.UI.Settings.open(state);
+        saveAndRender();
+      });
     }
   }
 

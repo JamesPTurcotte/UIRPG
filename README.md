@@ -29,12 +29,16 @@ src/
 │   └── characters.js  Multi-character management
 ├── save/
 │   ├── migrator.js    Versioned save migration
-│   └── storage.js     localStorage persistence + backup rotation
+│   ├── storage.js     localStorage persistence + backup rotation
+│   ├── local.js       Export/Import save files (.json)
+│   ├── drive.js       Google Drive API (auth, file CRUD, sync on close)
+│   └── sync.js        Bundle management (multi-character, timestamp merge)
 ├── ui/
 │   ├── modal.js       Modal dialog system
 │   ├── render.js      Full DOM re-render every frame
 │   ├── crafting.js    Item detail / enchant modal
 │   ├── surface.js     Panel wrapping system (overflow containment, header controls)
+│   ├── settings.js    Settings modal (export/import, Google Drive sync)
 │   └── layout.js      Resizable grid layout
 ├── main.js         # Entry point: game loop, event wiring, drag-and-drop
 └── styles.css      # All CSS (design system via CSS custom properties)
@@ -213,6 +217,34 @@ Methods: all(), displayName(item), weaponStats(item), showCompare(...), hideComp
 ```
 Methods: open(s, idx, source)
 ```
+
+### `UIRPG.UI.Settings` (`settings.js`)
+```
+Methods: open(s)
+```
+Opens the Settings modal with Local Saves (Export/Import) and Cloud Save (Google sign-in/sync status) sections.
+
+### `UIRPG.LocalFile` (`local.js`)
+```
+Methods: exportSave(s), importSave(onLoad)
+```
+- `exportSave(s)` — serializes state to JSON and downloads as a `.json` file
+- `importSave(onLoad)` — opens a file picker, reads the selected `.json`, validates `player` data, and calls `onLoad(parsed)` with the result
+
+### `UIRPG.Drive` (`drive.js`)
+```
+Methods: init(), signIn(), signOut(), isSignedIn(), getEmail(),
+         getLastSync(), ensureFile(), upload(bundle), download(),
+         syncOnClose(bundle)
+```
+Google Drive OAuth + file CRUD. Stores save in `appDataFolder` (hidden). Sync on close uses synchronous `XMLHttpRequest` so the tab wait for the upload to complete.
+
+### `UIRPG.Sync` (`sync.js`)
+```
+Methods: buildBundle(s), mergeBundles(local, drive), pickNewest(local, drive),
+         uploadAll(s), downloadAll(s), syncOnClose(s)
+```
+Multi-character bundle management. `buildBundle` collects every character's state + shared bank into a single JSON object. `mergeBundles` compares timestamps per-character and keeps the newest. `uploadAll`/`downloadAll` are used by the Sync Now button and auto-load on startup.
 
 ### `UIRPG.UI.Layout` (`layout.js`)
 ```
@@ -457,6 +489,40 @@ State shape highlights:
 ```
 
 SAVE_VERSION in `core.js` must be bumped when state shape changes. Each bump needs a migration function in `migrator.js`. Current: v14.
+
+### Export / Import (`local.js`)
+
+The Settings modal (⚙ cog in the title bar) provides Export and Import buttons:
+
+- **Export:** Downloads the current state as `UIRPG_save_YYYY-MM-DD.json`. Works for any character.
+- **Import:** Opens a file picker for a `.json` save file. Validates the file has `player` data before applying. The imported save replaces the current in-memory state and is saved to localStorage.
+
+### Google Drive Cloud Sync (`drive.js` + `sync.js`)
+
+**Opt-in:** Sign in with Google in the Settings modal. Your saves are stored in your Google Drive's `appDataFolder` (hidden from normal view).
+
+**Sync model:**
+1. **localStorage** is always the primary save (every 5 seconds, instant)
+2. **Google Drive** syncs on tab close (fire-and-forget, no wait during gameplay)
+3. **On page load** (if signed in): automatically checks Drive for newer saves — newest timestamp wins
+
+**Bundle format:** Drive stores ALL characters in a single `uirpg_save.json` file. When syncing, every character's save is bundled together. On load, the bundle is unpacked and each character is restored to its own localStorage slot.
+
+**Conflict resolution:** Newest timestamp wins per-character. No prompts, no modals.
+
+**Setup required before cloud sync works:**
+1. Go to https://console.cloud.google.com
+2. Create a project, enable Google Drive API
+3. Create OAuth 2.0 Client ID (Web application)
+4. Add your domain to Authorized JavaScript origins
+5. Copy the Client ID to `src/config.js` → `UIRPG.Config.GOOGLE_CLIENT_ID`
+
+**Files:**
+| Module | Purpose |
+|---|---|
+| `save/drive.js` | Google OAuth, Drive API (find/create file, upload, download), token management |
+| `save/sync.js` | Build bundles, merge timestamps, upload/download all characters, sync-on-close |
+| `config.js` | `GOOGLE_CLIENT_ID` for OAuth |
 
 ---
 

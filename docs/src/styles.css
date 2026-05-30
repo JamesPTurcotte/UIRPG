@@ -97,6 +97,17 @@ body {
 #action-top .stat span { color: var(--text); }
 #action-top .stat.gold span { color: var(--warn); }
 
+.settings-btn {
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 4px;
+  transition: color 0.15s;
+  user-select: none;
+}
+.settings-btn:hover { color: var(--text); }
+
 .unspent {
   color: var(--accent);
   cursor: pointer;
