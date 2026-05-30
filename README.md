@@ -510,12 +510,19 @@ The Settings modal (⚙ cog in the title bar) provides Export and Import buttons
 
 **Conflict resolution:** Newest timestamp wins per-character. No prompts, no modals.
 
-**Setup required before cloud sync works:**
+**One-time cloud sync setup:**
+
 1. Go to https://console.cloud.google.com
-2. Create a project, enable Google Drive API
-3. Create OAuth 2.0 Client ID (Web application)
-4. Add your domain to Authorized JavaScript origins
-5. Copy the Client ID to `src/config.js` → `UIRPG.Config.GOOGLE_CLIENT_ID`
+2. Create a project → **APIs & Services** → **Library** → search for and **enable** Google Drive API
+3. Go to **OAuth consent screen** → choose **External** → fill in app name (`UIRPG`), support email, developer email → **Save**
+4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID** → **Web application**
+5. Under **Authorized JavaScript origins**, add your domain:
+   - `https://jamespturcotte.github.io` (or your custom domain)
+   - `http://localhost` (for local testing)
+6. Click **Create**, then copy the **Client ID** that appears
+7. Open `src/config.js` and set `GOOGLE_CLIENT_ID` to the copied value
+8. Go back to **OAuth consent screen** → click **Publish App** → set to **In production**
+9. Run `bash build.sh` to rebuild, then push to GitHub
 
 **Files:**
 | Module | Purpose |
