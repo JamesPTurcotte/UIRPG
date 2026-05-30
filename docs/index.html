@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="UIRPG - A browser-based idle RPG">
+  <meta name="theme-color" content="#0d0d0d">
+  <title>UIRPG</title>
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <noscript>This game requires JavaScript to run.</noscript>
+  <div id="game-container">
+  <main id="app">
+
+    <section id="action-square" aria-label="Actions">
+      <div id="action-top">
+        <h1 class="title">◆ UIRPG</h1>
+        <span id="player-name" class="player-name">Adventurer</span>
+        <span class="stat">LVL <span id="level">1</span></span>
+        <span class="stat gold">◆ <span id="gold">0</span></span>
+        <span class="unspent visible" id="unspent-stats" data-action="stats" role="button" tabindex="0">0 pts</span>
+      </div>
+      <div id="action-cols">
+        <div id="action-player" class="action-col" aria-label="Player stats">
+          <div class="bl">HP <span id="hp-text">100/100</span></div>
+          <div id="player-hp-bar-container" role="progressbar" aria-label="Player HP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="player-hp-bar"></div></div>
+          <div id="xp-bar-container" role="progressbar" aria-label="Experience" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="xp-bar"></div></div>
+          <div id="player-stats"></div>
+        </div>
+        <div id="action-enemy" class="action-col" aria-label="Enemy or fishing stats">
+          <div class="bl bl-name"><span id="enemy-name">Slime</span></div>
+          <div id="enemy-hp-bar-container" role="progressbar" aria-label="Enemy HP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="enemy-hp-bar"></div></div>
+          <div id="enemy-hp-text-container" class="bl">HP <span id="enemy-hp-text">10/10</span></div>
+          <div id="enemy-stats"></div>
+          <div id="fishing-spot-info" class="hidden"></div>
+          <div id="fishing-cast-bar-container" class="hidden"><div id="fishing-cast-bar"></div></div>
+          <div id="fishing-last-catch" class="hidden"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="equip-panel" aria-label="Equipment">
+      <div class="panel-header">Equipment<span class="header-actions"><span class="auto-equip-toggle" data-action="toggle-auto-equip" role="button" tabindex="0">[Auto: Off]</span><span class="auto-equip-btn" data-action="auto-equip" role="button" tabindex="0">[Equip]</span></span></div>
+      <div class="equip-slot" data-kind="main_hand"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="main_hand">◇</span><span class="slot-label">Main Hand</span></span><span id="main_hand-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="off_hand"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="off_hand">◇</span><span class="slot-label">Off Hand</span></span><span id="off_hand-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="helmet"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="helmet">◇</span><span class="slot-label">Helmet</span></span><span id="helmet-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="chest"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="chest">◇</span><span class="slot-label">Chest</span></span><span id="chest-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="leggings"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="leggings">◇</span><span class="slot-label">Leggings</span></span><span id="leggings-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="boots"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="boots">◇</span><span class="slot-label">Boots</span></span><span id="boots-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="gloves"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="gloves">◇</span><span class="slot-label">Gloves</span></span><span id="gloves-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="ring1"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="ring1">◇</span><span class="slot-label">Ring 1</span></span><span id="ring1-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="ring2"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="ring2">◇</span><span class="slot-label">Ring 2</span></span><span id="ring2-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="belt"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="belt">◇</span><span class="slot-label">Belt</span></span><span id="belt-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="amulet"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="amulet">◇</span><span class="slot-label">Amulet</span></span><span id="amulet-slot" class="slot-empty">empty</span></div>
+      <div class="equip-sep"></div>
+      <div class="equip-slot" data-kind="rod"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="rod">◇</span><span class="slot-label">Rod</span></span><span id="rod-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="bait"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="bait">◇</span><span class="slot-label">Bait</span></span><span id="bait-slot" class="slot-empty">empty</span></div>
+      <div class="equip-slot" data-kind="fish"><span class="slot-left"><span class="equip-lock" data-action="toggle-equip-lock" data-slot="fish">◇</span><span class="slot-label">Fish</span></span><span id="fish-slot" class="slot-empty">empty</span></div>
+    </section>
+
+    <section id="logs-area" aria-label="Game log">
+      <div id="gamelog-panel">
+        <div class="panel-header">Activity Log</div>
+        <div id="game-log" role="log" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="inventory-panel" aria-label="Inventory">
+      <div class="panel-header"><span id="panel-title">Inventory</span><span class="header-actions"><span id="inv-auto" class="inv-auto" role="button" tabindex="0">[Auto: Off]</span><span class="salvage-btn" data-action="salvage" role="button" tabindex="0">[Salvage All]</span></span></div>
+      <div id="inv-toolbar"></div>
+      <div id="inventory-list"><div class="empty-text">empty</div></div>
+      <div id="currency-list" class="hidden"></div>
+    </section>
+
+    <nav id="action-bar" aria-label="Actions">
+      <div class="dropdown" id="fight-dropdown">
+        <button id="btn-fight" data-action="switch-fight" class="active">Fight</button>
+        <div class="dropdown-menu" id="zone-dropdown-menu"></div>
+      </div>
+      <div class="dropdown" id="fish-dropdown">
+        <button id="btn-fish" data-action="switch-fish">Fish</button>
+        <div class="dropdown-menu" id="fish-dropdown-menu"></div>
+      </div>
+    </nav>
+
+  </main>
+  </div>
+
+  <div id="modal" class="hidden" role="dialog" aria-modal="true" aria-label="Dialog"><div id="modal-content"></div></div>
+
+  <div id="compare-tooltip" class="hidden"></div>
+
+  <div id="vsplitter" class="splitter splitter-v" role="separator" aria-label="Resize columns"></div>
+  <div id="hsplitter" class="splitter splitter-h" role="separator" aria-label="Resize rows"></div>
+
+  <script src="src/game/core.js"></script>
+  <script src="src/game/utils.js"></script>
+  <script src="src/game/data.js"></script>
+  <script src="src/game/events.js"></script>
+  <script src="src/game/state.js"></script>
+  <script src="src/game/engine.js"></script>
+  <script src="src/game/actions.js"></script>
+  <script src="src/game/drops.js"></script>
+  <script src="src/game/fishing.js"></script>
+  <script src="src/game/characters.js"></script>
+  <script src="src/save/migrator.js"></script>
+  <script src="src/save/storage.js"></script>
+  <script src="src/ui/modal.js"></script>
+  <script src="src/ui/render.js"></script>
+  <script src="src/ui/surface.js"></script>
+  <script src="src/ui/crafting.js"></script>
+  <script src="src/ui/layout.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
