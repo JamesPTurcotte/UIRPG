@@ -7,6 +7,8 @@
     picking: false,
     hotExit: null,
     hotIndex: 0,
+    held: null,
+    sheetOpen: false,
   };
   let revealTimer = null;
 
@@ -105,6 +107,14 @@
   }
 
   document.body.addEventListener('click', (event) => {
+    if (view.state && view.state.reveal) {
+      const settling = event.target.closest('[data-act]');
+      const settlingAct = settling && settling.dataset.act;
+      if (settlingAct !== 'modal-yes' && settlingAct !== 'modal-no') {
+        dismissReveal();
+        return;
+      }
+    }
     const target = event.target.closest('[data-act]');
     if (!target) return;
     const act = target.dataset.act;
@@ -125,11 +135,9 @@
   });
 
   document.body.addEventListener('change', (event) => {
-    if (event.target.dataset.act !== 'assign') return;
-    const value = event.target.value;
-    if (value === '') return;
-    UIRPG.Run.assign(view.state, Number(value), event.target.dataset.ability);
-    paint();
+    if (event.target.id !== 'kind') return;
+    const area = document.getElementById('entry');
+    if (area && UIRPG.UI.Content.sample) area.value = UIRPG.UI.Content.sample(event.target.value);
   });
 
   document.body.addEventListener('mouseover', (event) => {
@@ -243,12 +251,47 @@
     if (act === 'pick-class') {
       UIRPG.Run.beginCreation(view.state, view.content, target.dataset.id, Math.floor(Math.random() * 1e9) + 1);
       view.picking = false;
+      view.held = null;
       await after(() => {});
       return;
     }
     if (act === 'roll-ability') {
       UIRPG.Run.rollAbility(view.state, Math.random);
       await after(() => {});
+      return;
+    }
+    if (act === 'hold-roll') {
+      const index = Number(target.dataset.index);
+      const creation = view.state.creation;
+      if (creation) {
+        Object.keys(creation.assignments).forEach(key => {
+          if (creation.assignments[key] === index) delete creation.assignments[key];
+        });
+      }
+      view.held = view.held === index ? null : index;
+      paint();
+      return;
+    }
+    if (act === 'place') {
+      const creation = view.state.creation;
+      const ability = target.dataset.ability;
+      if (!creation) return;
+      if (view.held == null) {
+        const index = creation.assignments[ability];
+        if (index == null) return;
+        delete creation.assignments[ability];
+        view.held = index;
+        paint();
+        return;
+      }
+      UIRPG.Run.assign(view.state, view.held, ability);
+      view.held = null;
+      paint();
+      return;
+    }
+    if (act === 'toggle-sheet') {
+      view.sheetOpen = !view.sheetOpen;
+      paint();
       return;
     }
     if (act === 'confirm-assign') {

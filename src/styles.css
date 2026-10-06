@@ -123,9 +123,11 @@ button:hover, button:focus-visible {
 }
 
 #page {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  align-self: flex-start;
+  width: min(calc(100% - 32px), calc(60ch + 48px));
+  max-width: calc(60ch + 48px);
   min-height: 0;
-  overflow: auto;
   margin: 16px;
   background: var(--page);
   color: var(--ink);
@@ -207,15 +209,27 @@ button:hover, button:focus-visible {
 }
 
 .room-node, .door {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--line);
   background: transparent;
   color: var(--page);
   padding: 6px 8px;
-  max-width: 140px;
+  max-width: 220px;
+  white-space: nowrap;
+}
+
+.room-name {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+}
+
+.room-word {
+  flex: 0 0 auto;
+  color: var(--candle);
+  font-size: 12px;
 }
 
 .room-node.current { border-color: var(--candle); color: var(--candle); }
@@ -233,15 +247,15 @@ button:hover, button:focus-visible {
 
 #tray {
   flex: 0 0 auto;
-  max-height: 30vh;
+  max-height: 40vh;
   overflow: auto;
   border-top: 1px solid var(--line);
   background: #1a1612;
   padding: 8px 16px 12px;
 }
 
-#tray.closed { max-height: 36px; }
-#tray:not(.closed) { min-height: 96px; }
+#tray.closed { max-height: 0; padding: 0; border-top-color: transparent; overflow: hidden; }
+#tray:not(.closed) { min-height: 0; }
 
 #dice {
   display: flex;
@@ -267,17 +281,11 @@ button:hover, button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-#chronicle {
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 6px;
-}
+#chronicle { display: none; }
 
 .token {
-  width: 56px;
-  height: 64px;
+  width: 48px;
+  height: 52px;
   flex: 0 0 auto;
   border-radius: 8px;
   background: var(--page);
@@ -362,7 +370,7 @@ input, select, textarea {
   padding: 8px;
 }
 
-textarea { min-height: 88px; resize: vertical; }
+textarea { min-height: 220px; resize: vertical; }
 
 .unlocks { margin-top: 16px; color: var(--muted); }
 .unlocks .known { color: var(--candle); }
@@ -401,6 +409,65 @@ textarea { min-height: 88px; resize: vertical; }
 #modal-content button { color: var(--page); }
 
 .notice { color: var(--candle); margin: 8px 0; }
+#page .notice { color: #8a5a16; }
+
+.beats {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  color: #6b5c4a;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.beats li + li { margin-top: 4px; }
+
+.hint, .seed { color: #6b5c4a; font-size: 14px; margin: 8px 0 0; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+
+#page .roll-chip {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c3b39a;
+  background: #f3e6d2;
+  color: var(--ink);
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-weight: 700;
+}
+
+#page .place { width: 100%; margin: 0; }
+
+.roll-chip.filled { background: #f3e6d2; }
+.roll-chip.held { box-shadow: 0 0 0 2px #8a5a16; }
+
+.place-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+.place {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0;
+}
+
+.place.primary { box-shadow: inset 3px 0 0 #8a5a16; }
+
+.skill-line, .feature-line { margin-top: 8px; color: var(--page); line-height: 1.4; }
+
+.sheet-foot {
+  margin-top: 22px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.sheet-foot button { color: var(--muted); }
+
+.sheet-toggle { display: none; margin-top: 10px; }
 
 .assign-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .assign-row select { width: auto; flex: 1; }
@@ -410,7 +477,14 @@ textarea { min-height: 88px; resize: vertical; }
   #sheet { max-height: 28vh; border-right: 0; border-bottom: 1px solid var(--line); }
   #sheet:not([hidden]) + #stage,
   #stage { grid-column: 1; }
-  #page { margin: 10px; padding: 16px; }
+  #page { margin: 10px; padding: 16px; width: calc(100% - 20px); }
+  #sheet:not(.open) .ability:not(.focus),
+  #sheet:not(.open) .skill-line,
+  #sheet:not(.open) .feature-line,
+  #sheet:not(.open) .pet-line,
+  #sheet:not(.open) .inv-line,
+  #sheet:not(.open) .sheet-foot { display: none; }
+  .sheet-toggle { display: inline-block; }
 }
 
 @media (prefers-reduced-motion: reduce) {

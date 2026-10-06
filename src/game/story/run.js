@@ -144,7 +144,7 @@ UIRPG.Run = (() => {
     const moves = ['attack'];
     if (run.pet && run.pet.trick) moves.push('pet');
     if (run.battle.healLeft) moves.push('heal');
-    moves.push('item');
+    if ((run.inventory || []).some(item => item.heal)) moves.push('item');
     moves.push('flee');
     return moves;
   }

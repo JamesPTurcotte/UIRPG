@@ -106,15 +106,17 @@ async function main() {
     await shot(page, 'desktop-dice-' + i);
     await page.keyboard.press('Space');
   }
-  await page.waitForSelector('[data-act="assign"]');
+  await page.waitForSelector('[data-act="hold-roll"]');
   await shot(page, 'desktop-assign');
-  const rolls = await page.$$eval('[data-ability="str"] option', nodes => nodes
-    .filter(node => node.value !== '')
-    .map(node => ({ index: Number(node.value), value: Number(node.textContent) })));
+  const rolls = await page.$$eval('[data-act="hold-roll"]', nodes => nodes.map(node => ({
+    index: Number(node.dataset.index),
+    value: Number(node.dataset.value),
+  })));
   const order = rolls.slice().sort((a, b) => b.value - a.value || a.index - b.index);
   const place = { cha: order[0], dex: order[1], con: order[2], str: order[3], wis: order[4], int: order[5] };
   for (const ability of Object.keys(place)) {
-    await page.select(`[data-ability="${ability}"]`, String(place[ability].index));
+    await page.click(`[data-act="hold-roll"][data-index="${place[ability].index}"]`);
+    await page.click(`[data-act="place"][data-ability="${ability}"]`);
   }
   await page.click('[data-act="confirm-assign"]');
   await page.waitForSelector('#page .prose');

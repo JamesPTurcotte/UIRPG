@@ -13,7 +13,7 @@ UIRPG.UI.Render = (() => {
     return `<div class="hp-bar" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>`;
   }
 
-  function sheet(state, content) {
+  function sheet(state, content, sheetOpen) {
     const run = state.run;
     if (!run) return '';
     const classDef = UIRPG.Content.byId(content.classes, run.classId);
@@ -21,25 +21,60 @@ UIRPG.UI.Render = (() => {
     const prof = UIRPG.Sheet.proficiency(run.level);
     const hp = state.reveal && state.reveal.hpBefore ? state.reveal.hpBefore.hp : run.hp;
     const lit = state.litAbility || '';
-    const abilities = UIRPG.Sheet.ABILITIES.map(key => {
-      const score = run.abilities[key];
-      const mod = UIRPG.Sheet.modifier(score);
-      return `<div class="ability${lit === key ? ' lit' : ''}" data-ability="${key}"><span>${UIRPG.Sheet.LABELS[key]} ${score}</span><span class="mod">${signed(mod)}</span></div>`;
-    }).join('');
     const pet = run.pet ? `<div class="pet-line">Pet ${esc(run.pet.name)}${run.pet.trick ? ` · ${esc(run.pet.trick.name)}` : ''}</div>` : '';
-    const abandon = `<div class="stat-line"><button type="button" data-act="ask-abandon">Abandon</button></div>`;
     const items = run.inventory.length
       ? `<div class="inv-line">${run.inventory.map(it => esc(it.name)).join(', ')}</div>`
       : '';
+    const focus = focusAbilities(state, content);
+    const abilityHtml = UIRPG.Sheet.ABILITIES.map(key => {
+      const score = run.abilities[key];
+      const mod = UIRPG.Sheet.modifier(score);
+      const cls = [
+        'ability',
+        lit === key ? 'lit' : '',
+        focus[key] ? 'focus' : '',
+      ].filter(Boolean).join(' ');
+      return `<div class="${cls}" data-ability="${key}"><span>${UIRPG.Sheet.LABELS[key]} ${score}</span><span class="mod">${signed(mod)}</span></div>`;
+    }).join('');
+    const skills = (classDef.skills || []).map(skill => skill.charAt(0).toUpperCase() + skill.slice(1));
+    const skillLine = skills.length ? `<div class="skill-line">${esc(skills.join(', '))}</div>` : '';
+    const feature = featureLine(classDef.feature);
+    const featureHtml = feature ? `<div class="feature-line">${esc(feature)}</div>` : '';
     return `
-      <div class="ability-grid">${abilities}</div>
+      <div class="ability-grid">${abilityHtml}</div>
       <div class="stat-line">HP ${Math.max(0, hp)}/${run.maxHp}</div>
       ${hpBar(hp, run.maxHp)}
       <div class="stat-line">AC ${ac} · Prof ${signed(prof)} · Floor ${run.floor}</div>
+      <button type="button" class="sheet-toggle" data-act="toggle-sheet">${sheetOpen ? 'Fewer scores' : 'Scores'}</button>
       <div class="stat-line">${esc(classDef.name)} · hit dice ${run.hitDiceLeft}</div>
+      ${skillLine}
+      ${featureHtml}
       ${pet}
       ${items}
-      ${abandon}`;
+      <div class="sheet-foot"><button type="button" data-act="ask-abandon">Abandon</button></div>`;
+  }
+
+  function focusAbilities(state, content) {
+    const found = {};
+    const run = state.run;
+    if (!run) return found;
+    if (run.battle) {
+      const classDef = UIRPG.Content.byId(content.classes, run.classId);
+      const ability = classDef && UIRPG.Sheet.attackAbility(classDef);
+      if (ability) found[ability] = true;
+      return found;
+    }
+    UIRPG.Run.currentOptions(state, content).forEach(opt => {
+      const preview = UIRPG.Run.checkPreview(state, content, opt);
+      if (preview && preview.ability) found[preview.ability] = true;
+    });
+    return found;
+  }
+
+  function featureLine(feature) {
+    if (feature === 'advantage-first') return 'Advantage on your first attack';
+    if (feature === 'heal-rest') return 'Heal once between rests';
+    return '';
   }
 
   function map(run, hot) {
@@ -78,20 +113,19 @@ UIRPG.UI.Render = (() => {
 
   function nodeButton(node, hot, run) {
     if (!node) return '';
-    const here = run.map.nodes[run.roomId];
-    const linked = node.id === run.roomId || (here && (here.next === node.id || here.left === node.id || here.right === node.id));
-    const mark = node.mark === 'sword' ? ' †' : node.mark === 'die' ? ' ◇' : '';
+    let tag = '';
+    if (node.id === run.roomId) {
+      if (node.mark === 'sword' || run.battle) tag = 'Fight';
+      else if (node.mark === 'die') tag = 'Check';
+    }
     const cls = [
       'room-node',
       node.id === hot ? 'hot' : '',
       node.visited ? 'visited' : '',
       node.current ? 'current' : '',
     ].filter(Boolean).join(' ');
-    const label = `${esc(node.title)}${mark}`;
-    if (!linked || node.id === run.roomId) {
-      return `<span class="${cls}" title="${esc(node.mapHint || '')}">${label}</span>`;
-    }
-    return `<button type="button" class="${cls}" data-act="move" data-id="${esc(node.id)}" title="${esc(node.mapHint || '')}">${label}</button>`;
+    const word = tag ? `<span class="room-word">${esc(tag)}</span>` : '';
+    return `<span class="${cls}" data-id="${esc(node.id)}" title="${esc(node.mapHint || '')}"><span class="room-name">${esc(node.title)}</span>${word}</span>`;
   }
 
   function optionButtons(state, content, options) {
@@ -103,10 +137,17 @@ UIRPG.UI.Render = (() => {
     }).join('');
   }
 
-  function page(state, content, hot) {
+  function beats(run, skip) {
+    if (!run || !run.chronicle) return '';
+    const lines = run.chronicle.filter(line => line && line !== skip).slice(-3);
+    if (!lines.length) return '';
+    return `<ul class="beats">${lines.map(line => `<li>${esc(line)}</li>`).join('')}</ul>`;
+  }
+
+  function page(state, content, hot, held) {
     const run = state.run;
     if (state.phase === 'rolling') return rolling(state);
-    if (state.phase === 'assign') return assigning(state, content);
+    if (state.phase === 'assign') return assigning(state, content, held);
     if (state.phase === 'recap') return recap(state);
     if (state.phase === 'swap-pet') return swap(state);
     if (!run) return '';
@@ -118,10 +159,9 @@ UIRPG.UI.Render = (() => {
       if (id !== run.roomId) run.map.nodes[id].current = false;
     });
     let body = here.body;
-    let title = here.title;
+    const title = here.title;
     if (run.mode === 'node' && content.nodes[run.nodeId]) {
       body = content.nodes[run.nodeId].body;
-      title = 'After';
     }
     const options = UIRPG.Run.currentOptions(state, content);
     const exits = UIRPG.Run.exits(run).map(ex => {
@@ -129,13 +169,18 @@ UIRPG.UI.Render = (() => {
       return `<button type="button" class="${cls.trim()}" data-act="move" data-id="${esc(ex.id)}" data-dir="${esc(ex.dir)}">${esc(ex.label)}</button>`;
     }).join('');
     const notice = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
+    const hint = run.floor === 1 && run.roomId === 'entrance' && !run.battle
+      ? '<p class="hint">Arrows choose a passage. Enter steps through. Space settles the dice.</p>'
+      : '';
     return `
       ${map(run, hot)}
       <article id="page">
         <h2>${esc(title)}</h2>
         <p class="prose">${esc(body)}</p>
+        ${beats(run, body)}
         ${notice}
         <div class="choices">${optionButtons(state, content, options)}${exits}</div>
+        ${hint}
       </article>`;
   }
 
@@ -154,9 +199,13 @@ UIRPG.UI.Render = (() => {
     const moves = UIRPG.Run.battleMoves(run).map((id, index) =>
       `<button type="button" data-act="battle" data-id="${esc(id)}">${index + 1} ${esc(names[id] || id)}</button>`
     );
+    const node = run.nodeId && content.nodes[run.nodeId];
+    const lead = node && node.body ? node.body : '';
     return `
       ${map(run, null)}
       <article id="page">
+        ${lead ? `<p class="prose">${esc(lead)}</p>` : ''}
+        ${beats(run, lead)}
         <div class="battle-head">
           <div class="who"><strong>${esc(classDef.name)}</strong>${hpBar(state.reveal && state.reveal.hpBefore ? state.reveal.hpBefore.hp : run.hp, run.maxHp)}</div>
           <div class="who"><strong>${esc(b.foe.name)}</strong>${hpBar(foeHp, b.foe.maxHp)}<div>AC ${b.foe.ac}</div></div>
@@ -172,6 +221,7 @@ UIRPG.UI.Render = (() => {
       <article id="page">
         <h2>Stairs</h2>
         <p class="prose">${esc(run.map.nodes[run.roomId].body)}</p>
+        ${beats(run, run.map.nodes[run.roomId].body)}
         <p>Hit dice left: ${run.hitDiceLeft}. Spending one rolls your hit die and adds Constitution.</p>
         <div class="choices">
           <button type="button" data-act="spend-die">Spend a hit die</button>
@@ -180,28 +230,48 @@ UIRPG.UI.Render = (() => {
       </article>`;
   }
 
-  function rolling(state) {
-    const n = state.creation.rolls.length;
-    return `<article id="page"><h2>Roll ${Math.min(n + 1, 6)} of 6</h2><p class="prose">4d6, drop the lowest. The tray keeps the discarded die.</p><button type="button" data-act="roll-ability">Roll</button></article>`;
+  function rollSlots(rolls) {
+    const slots = [];
+    for (let i = 0; i < 6; i++) {
+      if (i < rolls.length) slots.push(`<span class="roll-chip filled">${rolls[i]}</span>`);
+      else slots.push('<span class="roll-chip"></span>');
+    }
+    return `<div class="chip-row">${slots.join('')}</div>`;
   }
 
-  function assigning(state, content) {
+  function rolling(state) {
+    const n = state.creation.rolls.length;
+    return `<article id="page"><h2>Roll ${Math.min(n + 1, 6)} of 6</h2><p class="prose">4d6, drop the lowest. The tray keeps the discarded die.</p>${rollSlots(state.creation.rolls)}<button type="button" data-act="roll-ability">Roll</button></article>`;
+  }
+
+  function assigning(state, content, held) {
     const classDef = UIRPG.Content.byId(content.classes, state.creation.classId);
-    const rows = UIRPG.Sheet.ABILITIES.map(key => {
-      const options = state.creation.rolls.map((roll, index) => {
-        const taken = Object.keys(state.creation.assignments).some(k => k !== key && state.creation.assignments[k] === index);
-        const selected = state.creation.assignments[key] === index ? ' selected' : '';
-        return `<option value="${index}"${selected}${taken ? ' disabled' : ''}>${roll}</option>`;
-      }).join('');
-      const mark = key === classDef.primary ? ' · primary' : '';
-      return `<div class="assign-row"><label>${UIRPG.Sheet.LABELS[key]}${mark}</label><select data-act="assign" data-ability="${key}"><option value="">—</option>${options}</select></div>`;
+    const creation = state.creation;
+    const placed = {};
+    Object.keys(creation.assignments).forEach(key => { placed[creation.assignments[key]] = key; });
+    const chips = creation.rolls.map((roll, index) => {
+      if (placed[index]) return '';
+      const on = held === index ? ' held' : '';
+      return `<button type="button" class="roll-chip${on}" data-act="hold-roll" data-index="${index}" data-value="${roll}">${roll}</button>`;
     }).join('');
-    return `<article id="page"><h2>${esc(classDef.name)}</h2><p class="prose">Place each roll. The high one wants ${esc(UIRPG.Sheet.NAMES[classDef.primary])}.</p>${rows}<button type="button" data-act="confirm-assign">Begin</button></article>`;
+    const slots = UIRPG.Sheet.ABILITIES.map(key => {
+      const index = creation.assignments[key];
+      const value = index == null ? 'Place' : creation.rolls[index];
+      const primary = key === classDef.primary ? ' primary' : '';
+      const name = key === classDef.primary ? ' · primary' : '';
+      return `<button type="button" class="place${primary}" data-act="place" data-ability="${key}"><span>${UIRPG.Sheet.LABELS[key]}${name}</span><span class="placed">${value}</span></button>`;
+    }).join('');
+    const note = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
+    return `<article id="page"><h2>${esc(classDef.name)}</h2><p class="prose">Place each roll. The high one wants ${esc(UIRPG.Sheet.NAMES[classDef.primary])}.</p><div class="chip-row">${chips}</div><div class="place-list">${slots}</div>${note}<button type="button" data-act="confirm-assign">Begin</button></article>`;
   }
 
   function recap(state) {
     const r = state.recap || {};
-    return `<article id="page"><h2>The run ends</h2><p class="prose">Floor ${esc(r.floor)} · ${esc(r.theme || '')}. ${esc(r.blow || '')} ends it. Seed ${esc(r.seed)}.</p><button type="button" data-act="to-table">Return to the table</button></article>`;
+    const unlocks = (r.unlocks || []).filter(Boolean);
+    const earned = unlocks.length ? `<p class="prose">${esc(unlocks.join(' '))}</p>` : '';
+    const blow = r.blow || 'The dark';
+    const theme = r.theme || 'the delve';
+    return `<article id="page"><h2>The run ends</h2><p class="prose">${esc(blow)} ends it, on floor ${esc(r.floor)} of ${esc(theme)}.</p>${earned}<p class="seed">Seed ${esc(r.seed)}</p><button type="button" data-act="to-table">Return to the table</button></article>`;
   }
 
   function swap(state) {
@@ -325,9 +395,10 @@ UIRPG.UI.Render = (() => {
       stage.innerHTML = table(view.user, view.state, view.content, view.picking);
     } else {
       sheetEl.hidden = !view.state.run;
-      sheetEl.innerHTML = view.state.run ? sheet(view.state, view.content) : '';
-      stage.innerHTML = page(view.state, view.content, view.hotExit || null);
+      sheetEl.innerHTML = view.state.run ? sheet(view.state, view.content, view.sheetOpen) : '';
+      stage.innerHTML = page(view.state, view.content, view.hotExit || null, view.held);
     }
+    sheetEl.classList.toggle('open', !!view.sheetOpen);
     const shown = dice(view.state && view.state.reveal);
     if (shown.html) {
       tray.classList.remove('closed');
@@ -341,9 +412,7 @@ UIRPG.UI.Render = (() => {
       tray.classList.remove('crit', 'fumble');
       diceEl.innerHTML = '';
     }
-    const run = view.state && view.state.run;
-    const last = run && run.chronicle.length ? run.chronicle[run.chronicle.length - 1] : '';
-    chronicle.textContent = last || (view.state && view.state.notice) || '';
+    chronicle.textContent = '';
   }
 
   return { paint };
