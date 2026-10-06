@@ -139,47 +139,6 @@ UIRPG.Run = (() => {
     return { ok: true };
   }
 
-  function quickTest(state, content, seed) {
-    const chosen = classDef(content, 'ranger');
-    if (!chosen || !UIRPG.Meta.classOpen(chosen, state.meta)) return { ok: false, error: 'Test run is not available.' };
-    const abilities = { str: 14, dex: 16, con: 14, int: 12, wis: 14, cha: 14 };
-    const maxHp = UIRPG.Sheet.maxHp(chosen, abilities, 1);
-    const pet = chosen.startingPet ? Object.assign({}, UIRPG.Content.byId(content.pets, chosen.startingPet)) : null;
-    const potion = UIRPG.Content.byId(content.items, 'potion');
-    state.meta.runs += 1;
-    state.run = {
-      seed: seed || 1,
-      floor: 1,
-      level: 1,
-      classId: chosen.id,
-      abilities,
-      hp: maxHp,
-      maxHp,
-      magic: 0,
-      pet,
-      flags: {},
-      inventory: potion ? [Object.assign({}, potion)] : [],
-      usedOnce: [],
-      spent: {},
-      hitDiceLeft: 1,
-      chronicle: [],
-      roomId: null,
-      map: null,
-      mode: 'room',
-      nodeId: null,
-      battle: null,
-      prevTheme: null,
-    };
-    state.phase = 'play';
-    state.creation = null;
-    state.recap = null;
-    state.reveal = null;
-    state.petOffer = null;
-    enterFloor(state, content);
-    state.notice = 'Test run. Ranger, ready scores, one potion.';
-    return { ok: true };
-  }
-
   function battleMoves(run) {
     if (!run || !run.battle) return [];
     const moves = ['attack'];
@@ -580,7 +539,7 @@ UIRPG.Run = (() => {
   }
 
   return {
-    session, beginCreation, rollAbility, assign, confirmAssign, quickTest, currentOptions, exits, battleMoves,
+    session, beginCreation, rollAbility, assign, confirmAssign, currentOptions, exits, battleMoves,
     move, choose, keepPet, actBattle, restSpend, descend, abandon, clearReveal,
     toSave, fromSave, checkPreview, enterFloor, longRest,
   };

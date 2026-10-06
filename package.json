@@ -5,7 +5,8 @@
   "scripts": {
     "build": "bash build.sh",
     "test": "node tests/engine.js",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "play": "node server/play.js"
   },
   "devDependencies": {
     "puppeteer-core": "^24.43.1"
