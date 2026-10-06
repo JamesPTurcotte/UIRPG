@@ -1,10 +1,10 @@
 #!/bin/bash
-cd "$(dirname "$0")"
+url="https://jamespturcotte.github.io/UIRPG/"
 if command -v open >/dev/null 2>&1; then
-  open "./index.html"
+  open "$url"
 elif command -v xdg-open >/dev/null 2>&1; then
-  xdg-open "./index.html"
+  xdg-open "$url"
 else
-  echo "Open index.html in your browser."
+  echo "Open $url"
   read -r -p "Press return to close."
 fi

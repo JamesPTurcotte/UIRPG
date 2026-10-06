@@ -75,7 +75,7 @@ async function main() {
   const page = await browser.newPage();
   page.setDefaultTimeout(8000);
 
-  async function openFile() {
+  async function openSite() {
     await page.goto(base, { waitUntil: 'load' });
     await page.evaluate(() => localStorage.clear());
     await page.reload({ waitUntil: 'load' });
@@ -83,12 +83,11 @@ async function main() {
   }
 
   await page.setViewport({ width: 1280, height: 800 });
-  await openFile();
-  assert('opened as a file', base.startsWith('file:'));
+  await openSite();
   const hasAdmin = await page.$('[data-act="open-admin"]');
-  assert('the file can add content', !!hasAdmin);
+  assert('the page can add content', !!hasAdmin);
   const hasLogout = await page.$('[data-act="logout"]');
-  assert('a local file has no account to log out of', !hasLogout);
+  assert('a hosted page has no account to log out of', !hasLogout);
   await page.click('[data-act="open-admin"]');
   await page.waitForSelector('#entry');
   const adminHeading = await page.$eval('#admin h2', el => el.textContent);
@@ -188,7 +187,7 @@ async function main() {
     prose: !!document.querySelector('#page .prose, #page .battle-head, [data-act="descend"]'),
     battle: !!document.querySelector('[data-act="battle"]'),
   }));
-  assert('reopening the file returns to the same run', still.cont || still.prose || still.battle);
+  assert('reopening the page returns to the same run', still.cont || still.prose || still.battle);
   await shot(page, 'phone-resume');
 
   await browser.close();

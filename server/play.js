@@ -1,10 +1,7 @@
-// Opens index.html in the browser. The game runs from that file.
+// Opens the GitHub Pages site.
 const { spawn } = require('child_process');
-const path = require('path');
-const { pathToFileURL } = require('url');
 
-const index = path.join(__dirname, '..', 'index.html');
-const target = pathToFileURL(index).href;
+const target = 'https://jamespturcotte.github.io/UIRPG/';
 
 function openBrowser(url) {
   let child;

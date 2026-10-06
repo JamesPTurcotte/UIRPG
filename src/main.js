@@ -67,17 +67,28 @@
     if (!loaded.ok && loaded.state.notice) view.state.notice = loaded.state.notice;
   }
 
+  function storeKey(name) {
+    let path = location.pathname || '/';
+    if (path.endsWith('index.html')) path = path.slice(0, -'index.html'.length);
+    if (!path.endsWith('/')) path += '/';
+    return 'uirpg:' + path + name;
+  }
+
   function readLocal(key) {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = localStorage.getItem(storeKey(key));
       return raw ? JSON.parse(raw) : null;
     } catch (err) {
       return null;
     }
   }
 
+  function writeLocal(key, value) {
+    localStorage.setItem(storeKey(key), JSON.stringify(value));
+  }
+
   function localContent() {
-    const stored = readLocal('uirpg.content');
+    const stored = readLocal('content');
     if (!stored) return { content: UIRPG.Content.clone(), notice: '' };
     const checked = UIRPG.Content.validate(stored);
     if (!checked.ok) return { content: UIRPG.Content.clone(), notice: 'Saved story could not be read. Using the built-in story.' };
@@ -88,7 +99,7 @@
     const story = localContent();
     view.user = { name: 'You', admin: true, local: true };
     view.content = story.content;
-    const loaded = UIRPG.Run.fromSave(readLocal('uirpg.save') || {}, view.content);
+    const loaded = UIRPG.Run.fromSave(readLocal('save') || {}, view.content);
     view.state = loaded.state;
     if (story.notice) view.state.notice = story.notice;
     else if (!loaded.ok && loaded.state.notice) view.state.notice = loaded.state.notice;
@@ -96,9 +107,9 @@
   }
 
   async function save() {
-    if (location.protocol === 'file:') {
+    if (view.user && view.user.local) {
       try {
-        localStorage.setItem('uirpg.save', JSON.stringify(UIRPG.Run.toSave(view.state)));
+        writeLocal('save', UIRPG.Run.toSave(view.state));
       } catch (err) {
         throw new Error('This browser did not keep the save.');
       }
@@ -110,23 +121,22 @@
   }
 
   async function boot() {
-    if (location.protocol === 'file:') {
-      bootLocal();
-      return;
-    }
     try {
       const me = await api('/api/me');
-      if (!me.user) {
-        view.user = null;
+      if (me && Object.prototype.hasOwnProperty.call(me, 'user')) {
+        if (!me.user) {
+          view.user = null;
+          paint();
+          return;
+        }
+        adopt(me);
         paint();
         return;
       }
-      adopt(me);
-      paint();
     } catch (err) {
-      view.user = null;
-      paint();
+      // No account server. GitHub Pages and a plain index.html play from this browser.
     }
+    bootLocal();
   }
 
   function exits() {
@@ -270,7 +280,7 @@
         document.getElementById('content-error').textContent = 'That is not valid JSON.';
         return;
       }
-      if (location.protocol === 'file:') {
+      if (view.user && view.user.local) {
         const next = UIRPG.Content.clone(view.content);
         try {
           UIRPG.Content.apply(next, list, item);
@@ -284,7 +294,7 @@
           return;
         }
         try {
-          localStorage.setItem('uirpg.content', JSON.stringify(next));
+          writeLocal('content', next);
         } catch (err) {
           document.getElementById('content-error').textContent = 'This browser did not keep that story.';
           return;
