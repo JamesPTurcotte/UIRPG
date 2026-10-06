@@ -67,13 +67,53 @@
     if (!loaded.ok && loaded.state.notice) view.state.notice = loaded.state.notice;
   }
 
+  function readLocal(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function localContent() {
+    const stored = readLocal('uirpg.content');
+    if (!stored) return { content: UIRPG.Content.clone(), notice: '' };
+    const checked = UIRPG.Content.validate(stored);
+    if (!checked.ok) return { content: UIRPG.Content.clone(), notice: 'Saved story could not be read. Using the built-in story.' };
+    return { content: stored, notice: '' };
+  }
+
+  function bootLocal() {
+    const story = localContent();
+    view.user = { name: 'You', admin: true, local: true };
+    view.content = story.content;
+    const loaded = UIRPG.Run.fromSave(readLocal('uirpg.save') || {}, view.content);
+    view.state = loaded.state;
+    if (story.notice) view.state.notice = story.notice;
+    else if (!loaded.ok && loaded.state.notice) view.state.notice = loaded.state.notice;
+    paint();
+  }
+
   async function save() {
+    if (location.protocol === 'file:') {
+      try {
+        localStorage.setItem('uirpg.save', JSON.stringify(UIRPG.Run.toSave(view.state)));
+      } catch (err) {
+        throw new Error('This browser did not keep the save.');
+      }
+      return;
+    }
     if (!view.user) return;
     const body = UIRPG.Run.toSave(view.state);
     await api('/api/save', { method: 'PUT', body });
   }
 
   async function boot() {
+    if (location.protocol === 'file:') {
+      bootLocal();
+      return;
+    }
     try {
       const me = await api('/api/me');
       if (!me.user) {
@@ -228,6 +268,31 @@
         item = JSON.parse(document.getElementById('entry').value);
       } catch (err) {
         document.getElementById('content-error').textContent = 'That is not valid JSON.';
+        return;
+      }
+      if (location.protocol === 'file:') {
+        const next = UIRPG.Content.clone(view.content);
+        try {
+          UIRPG.Content.apply(next, list, item);
+        } catch (err) {
+          document.getElementById('content-error').textContent = err.message;
+          return;
+        }
+        const checked = UIRPG.Content.validate(next);
+        if (!checked.ok) {
+          document.getElementById('content-error').textContent = checked.errors.join(' ');
+          return;
+        }
+        try {
+          localStorage.setItem('uirpg.content', JSON.stringify(next));
+        } catch (err) {
+          document.getElementById('content-error').textContent = 'This browser did not keep that story.';
+          return;
+        }
+        view.content = next;
+        view.adminOpen = false;
+        view.state.notice = 'Published.';
+        paint();
         return;
       }
       try {

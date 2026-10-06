@@ -1,3 +1,3 @@
 @echo off
 cd /d "%~dp0"
-npm run play
+start "" "%~dp0index.html"

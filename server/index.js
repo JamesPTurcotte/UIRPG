@@ -214,23 +214,7 @@ function serveStatic(req, res) {
 }
 
 function addContent(content, list, item) {
-  if (!item || typeof item !== 'object') throw new Error('Missing item');
-  if (list === 'nodes') {
-    if (!item.id) throw new Error('Node needs an id');
-    const node = Object.assign({}, item);
-    delete node.id;
-    content.nodes[item.id] = node;
-    return;
-  }
-  if (!content[list] || !Array.isArray(content[list])) throw new Error('Unknown list');
-  if (list === 'layouts') {
-    content.layouts.push(item);
-    return;
-  }
-  if (!item.id) throw new Error('Needs an id');
-  const index = content[list].findIndex(row => row.id === item.id);
-  if (index >= 0) content[list][index] = item;
-  else content[list].push(item);
+  UIRPG.Content.apply(content, list, item);
 }
 
 const server = http.createServer(async (req, res) => {

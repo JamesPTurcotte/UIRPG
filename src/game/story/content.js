@@ -235,6 +235,27 @@ UIRPG.Content = (() => {
     return JSON.parse(JSON.stringify(obj || SEED));
   }
 
+  function apply(content, list, item) {
+    if (!item || typeof item !== 'object') throw new Error('Missing item');
+    if (list === 'nodes') {
+      if (!item.id) throw new Error('Node needs an id');
+      const node = Object.assign({}, item);
+      delete node.id;
+      content.nodes[item.id] = node;
+      return content;
+    }
+    if (!content[list] || !Array.isArray(content[list])) throw new Error('Unknown list');
+    if (list === 'layouts') {
+      content.layouts.push(item);
+      return content;
+    }
+    if (!item.id) throw new Error('Needs an id');
+    const index = content[list].findIndex(row => row.id === item.id);
+    if (index >= 0) content[list][index] = item;
+    else content[list].push(item);
+    return content;
+  }
+
   function byId(list, id) {
     return (list || []).find(x => x.id === id) || null;
   }
@@ -371,5 +392,5 @@ UIRPG.Content = (() => {
     return { errors, warnings, ok: errors.length === 0 };
   }
 
-  return { SEED, clone, byId, layoutFor, reaches, optionVisible, isCombat, themeAllowed, validate };
+  return { SEED, clone, apply, byId, layoutFor, reaches, optionVisible, isCombat, themeAllowed, validate };
 })();

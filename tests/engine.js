@@ -37,6 +37,9 @@ function assert(name, cond) {
 const content = UIRPG.Content.clone();
 const checked = UIRPG.Content.validate(content);
 assert('seed content validates', checked.ok);
+let applyThrew = false;
+try { UIRPG.Content.apply(content, 'nope', { id: 'x' }); } catch (err) { applyThrew = true; }
+assert('unknown content list is rejected', applyThrew);
 if (!checked.ok) console.error(checked.errors.join('\n'));
 
 const two = UIRPG.Dice.roll('2d6+1', UIRPG.Dice.scripted([0, 0.5]));

@@ -1,8 +1,9 @@
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
-const base = process.env.BASE || 'http://127.0.0.1:4173';
+const base = process.env.BASE || pathToFileURL(path.join(__dirname, '..', 'index.html')).href;
 const out = path.join(__dirname, 'shots');
 fs.mkdirSync(out, { recursive: true });
 
@@ -74,24 +75,27 @@ async function main() {
   const page = await browser.newPage();
   page.setDefaultTimeout(8000);
 
-  async function login(email, password, name) {
-    await page.goto(base, { waitUntil: 'networkidle0' });
-    await page.type('#email', email);
-    await page.type('#password', password);
-    if (name) await page.type('#name', name);
-    await page.click('[data-act="register"]');
-    await page.waitForSelector('#table-screen, #auth-error', { timeout: 4000 });
+  async function openFile() {
+    await page.goto(base, { waitUntil: 'load' });
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForSelector('#table-screen');
   }
 
   await page.setViewport({ width: 1280, height: 800 });
-  await page.goto(base, { waitUntil: 'networkidle0' });
-  await shot(page, 'desktop-login');
-
-  const stamp = Date.now();
-  const player = `player${stamp}@play.test`;
-  await login(player, 'password1', 'Ada');
+  await openFile();
+  assert('opened as a file', base.startsWith('file:'));
   const hasAdmin = await page.$('[data-act="open-admin"]');
-  assert('player does not see add content', !hasAdmin);
+  assert('the file can add content', !!hasAdmin);
+  const hasLogout = await page.$('[data-act="logout"]');
+  assert('a local file has no account to log out of', !hasLogout);
+  await page.click('[data-act="open-admin"]');
+  await page.waitForSelector('#entry');
+  const adminHeading = await page.$eval('#admin h2', el => el.textContent);
+  assert('admin form is open', adminHeading === 'Add content', adminHeading);
+  await shot(page, 'desktop-admin');
+  await page.click('[data-act="close-admin"]');
+  await page.waitForSelector('#table-screen');
   await shot(page, 'desktop-table');
 
   await page.click('[data-act="new-run"]');
@@ -177,36 +181,15 @@ async function main() {
 
   await page.setViewport({ width: 390, height: 844 });
   await shot(page, 'phone-play');
-  await page.goto(base, { waitUntil: 'networkidle0' });
-  await shot(page, 'phone-resume');
-
-  await page.click('[data-act="logout"]');
-  await page.waitForSelector('#email');
-  await page.type('#email', player);
-  await page.type('#password', 'password1');
-  await page.click('[data-act="login"]');
-  await page.waitForSelector('#table-screen, #page');
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForSelector('#page, #table-screen');
   const still = await page.evaluate(() => ({
     cont: !!document.querySelector('[data-act="continue"]'),
     prose: !!document.querySelector('#page .prose, #page .battle-head, [data-act="descend"]'),
     battle: !!document.querySelector('[data-act="battle"]'),
   }));
-  assert('login returns to the same run', still.cont || still.prose || still.battle);
-  await shot(page, 'phone-return');
-
-  await page.setViewport({ width: 1280, height: 800 });
-  await page.goto(base, { waitUntil: 'networkidle0' });
-  await page.evaluate(() => fetch('/api/logout', { method: 'POST' }));
-  await page.goto(base, { waitUntil: 'networkidle0' });
-  await page.type('#email', 'admin@table.local');
-  await page.type('#password', 'password1');
-  await page.click('[data-act="login"]');
-  await page.waitForSelector('[data-act="open-admin"]');
-  await page.click('[data-act="open-admin"]');
-  await page.waitForSelector('#entry');
-  const adminHeading = await page.$eval('#admin h2', el => el.textContent);
-  assert('admin form is open', adminHeading === 'Add content', adminHeading);
-  await shot(page, 'desktop-admin');
+  assert('reopening the file returns to the same run', still.cont || still.prose || still.battle);
+  await shot(page, 'phone-resume');
 
   await browser.close();
   if (process.exitCode) process.exit(process.exitCode);

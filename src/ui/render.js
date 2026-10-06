@@ -287,6 +287,7 @@ UIRPG.UI.Render = (() => {
     }).join('');
     const cont = state.run ? `<button type="button" data-act="continue">Continue · floor ${state.run.floor}</button>` : '';
     const admin = user.admin ? `<button type="button" data-act="open-admin">Add content</button>` : '';
+    const leave = user.local ? '' : `<button type="button" data-act="logout">Log out</button>`;
     const notice = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
     return `
       <div id="table-screen">
@@ -297,7 +298,7 @@ UIRPG.UI.Render = (() => {
           ${cont}
           <button type="button" data-act="new-run">New run</button>
           ${admin}
-          <button type="button" data-act="logout">Log out</button>
+          ${leave}
           <div class="unlocks">${unlocks}</div>
           <div id="class-pick"${picking ? '' : ' hidden'}>
             <h3>Class</h3>
@@ -371,7 +372,7 @@ UIRPG.UI.Render = (() => {
     const tray = $('tray');
     const diceEl = $('dice');
     const chronicle = $('chronicle');
-    who.innerHTML = view.user ? `${esc(view.user.name || view.user.email)} <button type="button" data-act="logout">Log out</button>` : '';
+    who.innerHTML = view.user && !view.user.local ? `${esc(view.user.name || view.user.email)} <button type="button" data-act="logout">Log out</button>` : '';
     if (!view.user) {
       sheetEl.hidden = true;
       sheetEl.innerHTML = '';
