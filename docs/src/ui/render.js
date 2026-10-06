@@ -1,427 +1,420 @@
 UIRPG.UI = UIRPG.UI || {};
 
 UIRPG.UI.Render = (() => {
-  function $(id) { return document.getElementById(id); }
-
   const esc = UIRPG.Utils.esc;
+  const $ = (id) => document.getElementById(id);
 
-  const FILTER_MAP = {
-    main_hand: 'Wep', off_hand: 'Off', helmet: 'Helm', chest: 'Chest',
-    leggings: 'Legs', boots: 'Boots', gloves: 'Gloves',
-    ring: 'Ring', belt: 'Belt', amulet: 'Amulet',
-  };
-
-  const DEFENCE_SLOTS = ['off_hand', 'helmet', 'chest', 'leggings', 'boots', 'gloves', 'belt'];
-
-  function statRow(label, value, valueCls) {
-    const vc = valueCls ? ` ${valueCls}` : '';
-    return `<div class="dot-row"><span class="dot-label">${esc(label)}</span><span class="dot-filler"></span><span class="dot-value${vc}">${esc(value)}</span></div>`;
+  function signed(n) {
+    return n >= 0 ? '+' + n : String(n);
   }
 
-  function rarityClass(r) { return r || 'Common'; }
-
-  function displayName(item) {
-    return UIRPG.Drops.displayName(item);
+  function hpBar(current, max) {
+    const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0;
+    return `<div class="hp-bar" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>`;
   }
 
-  function itemStats(item) {
-    return UIRPG.Drops.itemStats(item);
-  }
-
-  function weaponStats(item) {
-    if (item.kind !== 'main_hand') return [];
-    const lines = [];
-    if (item.minAtk !== undefined) {
-      const bonusAtk = item.atk || 0;
-      const avg = ((item.minAtk + bonusAtk) + (item.maxAtk || item.minAtk) + bonusAtk) / 2;
-      const dps = Math.round(avg / ((item.attackSpeed || 2000) / 1000) * 10) / 10;
-      lines.push(`${dps} DPS`);
-    }
-    if (item.attackSpeed) lines.push(`${item.attackSpeed}ms`);
-    if (item.critChance) lines.push(`+${item.critChance}% Crit`);
-    if (item.critDmg) lines.push(`+${Math.round(item.critDmg * 100)}% CDmg`);
-    return lines;
-  }
-
-  function primaryValue(item) {
-    if (!item) return 0;
-    if (item.kind === 'main_hand') return UIRPG.State.weaponDps(item);
-    if (DEFENCE_SLOTS.includes(item.kind)) return Math.max(item.armorRating || 0, item.evasionRating || 0);
-    if (item.kind === 'ring') return (item.bonusStr || 0) + (item.bonusDex || 0) + (item.bonusLuck || 0) + (item.bonusVit || 0) + (item.atk || 0) + (item.moveSpeed || 0);
-    if (item.kind === 'amulet') return (item.maxHpBonus || 0) + (item.moveSpeed || 0) + (item.searchSpeed || 0) + (item.flatBlock || 0) + (item.lifeOnHit || 0) + (item.thorns || 0);
-    if (item.kind === 'rod') return item.fishingPower || 0;
-    if (item.kind === 'bait') return (item.fishingPower || 0) + (item.catchSpeed || 0) + (item.treasureChance || 0);
-    if (item.kind === 'fish') return (item.healAmount || 0) * (item.maxUses || 1);
-    return 0;
-  }
-
-  const WEAPON_STAT_SKIP = ['ATK', 'Crit', 'CDmg'];
-
-  let logEntryCount = 0;
-
-  function renderLog(el, logArray) {
-    if (!logArray) { el.innerHTML = ''; return; }
-    const hadNewEntries = logArray.length !== logEntryCount;
-    logEntryCount = logArray.length;
-    el.innerHTML = logArray.slice(-30).reverse().map(entry => {
-      const text = entry.count > 1 ? `${entry.msg} *${entry.count}` : entry.msg;
-      const cls = entry.type || 'info';
-      return `<div class="log-entry ${cls}">${esc(text)}</div>`;
+  function sheet(state, content, sheetOpen) {
+    const run = state.run;
+    if (!run) return '';
+    const classDef = UIRPG.Content.byId(content.classes, run.classId);
+    const ac = UIRPG.Sheet.armorClass(classDef, run.abilities);
+    const prof = UIRPG.Sheet.proficiency(run.level);
+    const hp = state.reveal && state.reveal.hpBefore ? state.reveal.hpBefore.hp : run.hp;
+    const lit = state.litAbility || '';
+    const pet = run.pet ? `<div class="pet-line">Pet ${esc(run.pet.name)}${run.pet.trick ? ` · ${esc(run.pet.trick.name)}` : ''}</div>` : '';
+    const items = run.inventory.length
+      ? `<div class="inv-line">${run.inventory.map(it => esc(it.name)).join(', ')}</div>`
+      : '';
+    const focus = focusAbilities(state, content);
+    const abilityHtml = UIRPG.Sheet.ABILITIES.map(key => {
+      const score = run.abilities[key];
+      const mod = UIRPG.Sheet.modifier(score);
+      const cls = [
+        'ability',
+        lit === key ? 'lit' : '',
+        focus[key] ? 'focus' : '',
+      ].filter(Boolean).join(' ');
+      return `<div class="${cls}" data-ability="${key}"><span>${UIRPG.Sheet.LABELS[key]} ${score}</span><span class="mod">${signed(mod)}</span></div>`;
     }).join('');
-    if (hadNewEntries) el.scrollTop = 0;
+    const skills = (classDef.skills || []).map(skill => skill.charAt(0).toUpperCase() + skill.slice(1));
+    const skillLine = skills.length ? `<div class="skill-line">${esc(skills.join(', '))}</div>` : '';
+    const feature = featureLine(classDef.feature);
+    const featureHtml = feature ? `<div class="feature-line">${esc(feature)}</div>` : '';
+    return `
+      <div class="ability-grid">${abilityHtml}</div>
+      <div class="stat-line">HP ${Math.max(0, hp)}/${run.maxHp}</div>
+      ${hpBar(hp, run.maxHp)}
+      <div class="stat-line">AC ${ac} · Prof ${signed(prof)} · Floor ${run.floor}</div>
+      <button type="button" class="sheet-toggle" data-act="toggle-sheet">${sheetOpen ? 'Fewer scores' : 'Scores'}</button>
+      <div class="stat-line">${esc(classDef.name)} · hit dice ${run.hitDiceLeft}</div>
+      ${skillLine}
+      ${featureHtml}
+      ${pet}
+      ${items}
+      <div class="sheet-foot"><button type="button" data-act="ask-abandon">Abandon</button></div>`;
   }
 
-  function showCompare(state, item, cx, cy) {
-    const el = $('#compare-tooltip');
-    if (!el) return;
-    let equipSlot = item.kind;
-    if (item.kind === 'ring') {
-      equipSlot = state.equipment.ring1 ? 'ring1' : 'ring2';
+  function focusAbilities(state, content) {
+    const found = {};
+    const run = state.run;
+    if (!run) return found;
+    if (run.battle) {
+      const classDef = UIRPG.Content.byId(content.classes, run.classId);
+      const ability = classDef && UIRPG.Sheet.attackAbility(classDef);
+      if (ability) found[ability] = true;
+      return found;
     }
-    const equipped = state.equipment[equipSlot];
-    if (!equipped) { hideCompare(); return; }
-
-    const iStats = itemStats(item);
-    const eStats = itemStats(equipped);
-    const iWeapon = weaponStats(item);
-    const eWeapon = weaponStats(equipped);
-
-    el.innerHTML = `
-      <div class="compare-col">
-        <div class="compare-label">Inventory</div>
-        <div class="compare-name ${rarityClass(item.rarity)}">${esc(displayName(item))}</div>
-        ${iWeapon.map(s => `<div class="compare-stat">${esc(s)}</div>`).join('')}
-        ${iStats.map(s => `<div class="compare-stat">${esc(s)}</div>`).join('')}
-      </div>
-      <div class="compare-vs">vs</div>
-      <div class="compare-col">
-        <div class="compare-label">Equipped</div>
-        <div class="compare-name ${rarityClass(equipped.rarity)}">${esc(displayName(equipped))}</div>
-        ${eWeapon.map(s => `<div class="compare-stat">${esc(s)}</div>`).join('')}
-        ${eStats.map(s => `<div class="compare-stat">${esc(s)}</div>`).join('')}
-      </div>
-    `;
-    el.style.position = 'fixed';
-    el.style.left = Math.min(cx + 12, window.innerWidth - 330) + 'px';
-    el.style.top = Math.min(cy - 10, window.innerHeight - el.offsetHeight - 12) + 'px';
-    el.classList.remove('hidden');
-  }
-
-  function hideCompare() {
-    const el = $('#compare-tooltip');
-    if (el) el.classList.add('hidden');
-  }
-
-  function renderActionBar(s) {
-    const btnFight = document.getElementById('btn-fight');
-    const btnFish = document.getElementById('btn-fish');
-    if (btnFight) btnFight.className = s.activity === 'fight' ? 'active' : '';
-    if (btnFish) btnFish.className = s.activity === 'fish' ? 'active' : '';
-  }
-
-  function renderCombatUI(s) {
-    const e = s.currentEnemy;
-    const stats = UIRPG.State.computeStats(s);
-
-    const drPct = Math.round(UIRPG.State.calcDR(stats.armorRating));
-    const dodgePct = Math.round(UIRPG.State.calcDodge(stats.evasionRating));
-    const hitPct = e && e.hp > 0 && !s.searching
-      ? Math.round(Math.max(5, Math.min(95, stats.accuracyRating / (stats.accuracyRating + (e.evasion || 0) * 3) * 100)))
-      : null;
-
-    const armDisplay = `${stats.armorRating} (${drPct}%)`;
-    const evaDisplay = `${stats.evasionRating} (${dodgePct}%)`;
-    const accDisplay = hitPct !== null ? `${stats.accuracyRating} (${hitPct}%)` : `${stats.accuracyRating}`;
-
-    const playerRows = [
-      ['HEAL', s.fishConsumeUses > 0 && s.equipment.fish ? `${Math.max(0, s.fishConsumeUses * (s.equipment.fish.healAmount || 10))} HP in ${s.fishConsumeUses} bites` : '--'],
-      ['ATK', `${stats.atkDmg}`],
-      ['AS', `${stats.attackSpeed}ms`],
-      ['ARM', armDisplay],
-      ['EVA', evaDisplay],
-      ['DODGE', `${stats.dodgeChance > 0 ? stats.dodgeChance + '%' : '0%'}`],
-      ['BLOCK', `${stats.flatBlock > 0 ? stats.flatBlock : '0'}`],
-      ['ACC', accDisplay],
-      ['CRIT', `${Math.round(stats.critChance)}% / +${Math.round((UIRPG.State.BALANCE.BASE_CRIT_MULT - 1 + (stats.critDmgBonus || 0)) * 100)}% CDmg`],
-      ['XP', `+${Math.round((stats.xpMult - 1) * 100)}%`],
-      ['GF', `+${Math.round((stats.goldMult - 1) * 100)}%`],
-      ['SPD', `${Math.round(stats.monsterFindSpeed * 100)}%`],
-      ['STR', `${UIRPG.State.effectiveStr(s)}`],
-      ['DEX', `${UIRPG.State.effectiveDex(s)}`],
-      ['LCK', `${UIRPG.State.effectiveLuck(s)}`],
-      ['VIT', `${UIRPG.State.effectiveVit(s)}`],
-    ];
-    $('player-stats').innerHTML = playerRows.map(([l, v]) => statRow(l, v)).join('');
-
-    const enemyNameEl = $('enemy-name');
-    const enemyHpBar = $('enemy-hp-bar');
-    const enemyHpText = $('enemy-hp-text');
-    const enemyHpBarContainer = $('enemy-hp-bar-container');
-    const enemyStats = $('enemy-stats');
-
-    const enemyHpTextContainer = document.getElementById('enemy-hp-text-container');
-    if (enemyHpTextContainer) enemyHpTextContainer.classList.remove('hidden');
-
-    if (s.searching || !e || e.hp <= 0) {
-      enemyNameEl.textContent = 'Searching...';
-      enemyHpBar.style.width = '0%';
-      enemyHpText.textContent = '--/--';
-      enemyHpBarContainer.classList.add('hidden');
-      enemyStats.innerHTML = [
-        ['ATK', '--', 'dim'], ['DEF', '--', 'dim'], ['EVA', '--', 'dim'],
-        ['ACC', '--', 'dim'], ['REGEN', '--', 'dim'], ['XP', '--', 'dim'],
-        ['GOLD', '--', 'dim'], ['SEARCH', `${Math.max(0, Math.ceil(s.downtime))}ms`],
-      ].map(([l, v, c]) => statRow(l, v, c)).join('');
-    } else {
-      enemyNameEl.textContent = e.name;
-      const ePct = e.maxHp > 0 ? (Math.max(0, e.hp) / e.maxHp * 100) : 0;
-      enemyHpBar.style.width = `${ePct}%`;
-      enemyHpText.textContent = `${Math.max(0, e.hp)}/${e.maxHp}`;
-      enemyHpBarContainer.classList.remove('hidden');
-      enemyStats.innerHTML = [
-        ['ATK', `${e.atk}`], ['DEF', `${e.def}`], ['EVA', `${e.evasion}`],
-        ['ACC', `${e.accuracy}`], ['XP', `${e.xp}`], ['GOLD', `${e.gold}`],
-      ].map(([l, v]) => statRow(l, v)).join('');
-    }
-
-    $('fishing-spot-info').classList.add('hidden');
-    $('fishing-cast-bar-container').classList.add('hidden');
-    $('fishing-last-catch').classList.add('hidden');
-  }
-
-  function renderFishingUI(s) {
-    const stats = UIRPG.State.computeStats(s);
-    const spot = UIRPG.Data.findFishingSpot(s.fishingSpot);
-    const fp = UIRPG.Fishing.fishingPower(s);
-
-    const playerRows = [
-      ['FISH PW', `${fp}`],
-      ['CAST', `${stats.catchSpeed || 0}%`],
-      ['TRSR', `${stats.treasureChance || 0}%`],
-      ['CAUGHT', `${s.fishCaught || 0}`],
-      ['LCK', `${UIRPG.State.effectiveLuck(s)}`],
-      ['STR', `${UIRPG.State.effectiveStr(s)}`],
-      ['DEX', `${UIRPG.State.effectiveDex(s)}`],
-      ['VIT', `${UIRPG.State.effectiveVit(s)}`],
-      ['XP', `+${Math.round((stats.xpMult - 1) * 100)}%`],
-      ['GF', `+${Math.round((stats.goldMult - 1) * 100)}%`],
-    ];
-    $('player-stats').innerHTML = playerRows.map(([l, v]) => statRow(l, v)).join('');
-
-    const enemyNameEl = $('enemy-name');
-    const enemyHpBar = $('enemy-hp-bar');
-    const enemyHpText = $('enemy-hp-text');
-    const enemyHpBarContainer = $('enemy-hp-bar-container');
-    const enemyStats = $('enemy-stats');
-    const spotInfo = $('fishing-spot-info');
-    const castBarContainer = $('fishing-cast-bar-container');
-    const castBar = $('fishing-cast-bar');
-    const lastCatch = $('fishing-last-catch');
-
-    enemyHpBarContainer.classList.add('hidden');
-    const enemyHpTextContainer = document.getElementById('enemy-hp-text-container');
-    if (enemyHpTextContainer) enemyHpTextContainer.classList.add('hidden');
-    enemyStats.innerHTML = '';
-
-    if (spot) {
-      enemyNameEl.textContent = spot.name;
-      enemyHpText.textContent = '';
-
-      const catchAt = spot.catchTime;
-      const pct = Math.min(100, Math.max(0, (s.fishingTimer || 0) / catchAt * 100));
-      castBarContainer.classList.remove('hidden');
-      castBar.style.width = `${pct}%`;
-
-      const fishList = spot.fish.map(f => `${f.name}`).join(', ');
-      let castLine = `Cast: ${Math.round(s.fishingTimer || 0)}/${catchAt}ms`;
-      if (s.fishingCooldown > 0) castLine = `Anticipating: ${Math.ceil(s.fishingCooldown)}ms`;
-      spotInfo.innerHTML = `<div class="bl">Fish: ${fishList}</div><div class="bl">${castLine}</div>`;
-      spotInfo.classList.remove('hidden');
-    } else {
-      enemyNameEl.textContent = 'No spot selected';
-      enemyHpText.textContent = '';
-      castBarContainer.classList.add('hidden');
-      spotInfo.classList.add('hidden');
-    }
-
-    lastCatch.classList.add('hidden');
-  }
-
-  function renderEquipment(s) {
-    const eq = s.equipment;
-    const SLOT_IDS = ['main_hand', 'off_hand', 'helmet', 'chest', 'leggings', 'boots', 'gloves', 'ring1', 'ring2', 'belt', 'amulet', 'rod', 'bait', 'fish'];
-    const locks = s.equipLocks || {};
-    SLOT_IDS.forEach(slot => {
-      const lockEl = document.querySelector(`[data-action="toggle-equip-lock"][data-slot="${slot}"]`);
-      if (lockEl) {
-        const locked = locks[slot];
-        lockEl.textContent = locked ? '◆' : '◇';
-        lockEl.className = `equip-lock ${locked ? 'locked' : 'unlocked'}`;
-      }
-      const id = `${slot}-slot`;
-      const el = $(id);
-      if (!el) return;
-      const item = eq[slot];
-      el.dataset.kind = slot;
-      if (item) {
-        let t = displayName(item);
-        const b = itemStats(item);
-        const w = weaponStats(item);
-        const extra = w.concat(item.kind === 'main_hand' ? b.filter(s => !WEAPON_STAT_SKIP.some(k => s.includes(k))) : b);
-        if (extra.length) t += ` (${extra.join(', ')})`;
-        el.textContent = t;
-        el.className = `slot-item ${rarityClass(item.rarity)}`;
-        el.draggable = true;
-      } else {
-        el.textContent = 'empty';
-        el.className = 'slot-empty';
-        el.draggable = false;
-      }
+    UIRPG.Run.currentOptions(state, content).forEach(opt => {
+      const preview = UIRPG.Run.checkPreview(state, content, opt);
+      if (preview && preview.ability) found[preview.ability] = true;
     });
+    return found;
   }
 
-  function renderInventory(s) {
-    const isInv = s.activeTab !== 'bank';
-    const invCap = UIRPG.State.invCap(s);
-    const bankCap = UIRPG.State.bankCap(s);
-    const titleEl = document.getElementById('panel-title');
-    if (titleEl) {
-      titleEl.textContent = isInv
-        ? `Inventory (${s.inventory.length}/${invCap})`
-        : `Bank (${s.bank.length}/${bankCap})`;
-    }
+  function featureLine(feature) {
+    if (feature === 'advantage-first') return 'Advantage on your first attack';
+    if (feature === 'heal-rest') return 'Heal once between rests';
+    return '';
+  }
 
-    const tabCls = (t) => 'inv-tab' + (s.activeTab === t ? ' active' : '');
-
-    // Update tab classes and visibility (elements persist in HTML, not rebuilt)
-    document.querySelector('[data-tab="inv"] > .inv-tab').className = tabCls('inv');
-    document.querySelector('[data-tab="bank"] > .inv-tab').className = tabCls('bank');
-    const itemsWrap = document.querySelector('[data-tab="items"]');
-    const currenciesWrap = document.querySelector('[data-tab="currencies"]');
-    if (itemsWrap) {
-      itemsWrap.style.display = s.activeTab === 'bank' ? '' : 'none';
-      if (s.activeTab === 'bank') itemsWrap.querySelector('.inv-tab').className = tabCls('items');
-    }
-    if (currenciesWrap) {
-      currenciesWrap.style.display = s.activeTab === 'bank' ? '' : 'none';
-      if (s.activeTab === 'bank') currenciesWrap.querySelector('.inv-tab').className = tabCls('currencies');
-    }
-
-    // Only rebuild the filters container
-    const activeFilter = s.inventoryFilter || 'all';
-    const filters = ['all', 'main_hand', 'off_hand', 'helmet', 'chest', 'leggings', 'boots', 'gloves', 'ring', 'belt', 'amulet', 'rod', 'bait', 'fish'];
-    let fHtml = '';
-    for (const f of filters) {
-      const label = FILTER_MAP[f] || f.charAt(0).toUpperCase() + f.slice(1);
-      const cls = f === activeFilter ? 'inv-filter active' : 'inv-filter';
-      fHtml += `<button type="button" class="${cls}" data-filter="${f}">${label}</button>`;
-    }
-    const fc = document.getElementById('inv-filters-container');
-    if (fc) fc.innerHTML = fHtml;
-
-    const autoEl = document.getElementById('inv-auto');
-    if (autoEl) {
-      if (isInv) {
-        const autoLabel = s.autoSalvage === 'off' ? 'Off' : s.autoSalvage;
-        autoEl.textContent = `[Auto: ${autoLabel}]`;
-        autoEl.classList.remove('hidden');
-      } else {
-        autoEl.classList.add('hidden');
+  function map(run, hot) {
+    if (!run || !run.map) return '';
+    const nodes = run.map.nodes;
+    const order = [];
+    const seen = {};
+    function walk(id) {
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      const node = nodes[id];
+      if (!node) return;
+      if (node.left && node.right) {
+        order.push({ kind: 'fork', id, left: node.left, right: node.right });
+        seen[node.left] = true;
+        seen[node.right] = true;
+        const left = nodes[node.left];
+        const right = nodes[node.right];
+        if (left && left.next) walk(left.next);
+        if (right && right.next && !(left && left.next === right.next)) walk(right.next);
+        return;
       }
+      order.push({ kind: 'room', id });
+      walk(node.next);
     }
-
-    const salvageBtn = document.querySelector('.salvage-btn');
-    if (salvageBtn) {
-      salvageBtn.classList.toggle('hidden', !isInv);
-    }
-
-    const currencyListEl = document.getElementById('currency-list');
-    const invListEl = $('inventory-list');
-
-    if (s.activeTab === 'bank' && s.bankTab === 'currencies') {
-      invListEl.classList.add('hidden');
-      currencyListEl.classList.remove('hidden');
-      const currencies = s.currencies || {};
-      const entries = Object.entries(currencies);
-      if (!entries.length) {
-        currencyListEl.innerHTML = '<div class="empty-text">no currencies</div>';
-      } else {
-        currencyListEl.innerHTML = entries.map(([id, count]) => {
-          const found = UIRPG.Data.FISHING_SPOTS.flatMap(sp => sp.treasures || []).find(t => t.id === id);
-          const name = found ? found.name : id;
-          return `<div class="currency-entry">◆ ${esc(name)} <span class="currency-count">×${count}</span></div>`;
-        }).join('');
+    walk('entrance');
+    if (!seen.stairs && nodes.stairs) order.push({ kind: 'room', id: 'stairs' });
+    const html = order.map(piece => {
+      if (piece.kind === 'fork') {
+        return `<div class="fork">${nodeButton(nodes[piece.left], hot, run)}${nodeButton(nodes[piece.right], hot, run)}</div>`;
       }
+      return nodeButton(nodes[piece.id], hot, run);
+    }).join('');
+    return `<div id="map"><div class="map-label">${esc(run.map.themeName)} · Floor ${run.floor}</div><div class="map-row">${html}</div></div>`;
+  }
+
+  function nodeButton(node, hot, run) {
+    if (!node) return '';
+    let tag = '';
+    if (node.id === run.roomId) {
+      if (node.mark === 'sword' || run.battle) tag = 'Fight';
+      else if (node.mark === 'die') tag = 'Check';
+    }
+    const cls = [
+      'room-node',
+      node.id === hot ? 'hot' : '',
+      node.visited ? 'visited' : '',
+      node.current ? 'current' : '',
+    ].filter(Boolean).join(' ');
+    const word = tag ? `<span class="room-word">${esc(tag)}</span>` : '';
+    return `<span class="${cls}" data-id="${esc(node.id)}" title="${esc(node.mapHint || '')}"><span class="room-name">${esc(node.title)}</span>${word}</span>`;
+  }
+
+  function optionButtons(state, content, options) {
+    return options.map(opt => {
+      const preview = UIRPG.Run.checkPreview(state, content, opt);
+      const extra = preview ? ` ${signed(preview.total)} · DC ${preview.dc}` : '';
+      const ability = preview ? preview.ability : '';
+      return `<button type="button" data-act="option" data-id="${esc(opt.id)}" data-ability="${esc(ability)}">${esc(opt.label)}${esc(extra)}</button>`;
+    }).join('');
+  }
+
+  function beats(run, skip) {
+    if (!run || !run.chronicle) return '';
+    const lines = run.chronicle.filter(line => line && line !== skip).slice(-3);
+    if (!lines.length) return '';
+    return `<ul class="beats">${lines.map(line => `<li>${esc(line)}</li>`).join('')}</ul>`;
+  }
+
+  function page(state, content, hot, held) {
+    const run = state.run;
+    if (state.phase === 'rolling') return rolling(state);
+    if (state.phase === 'assign') return assigning(state, content, held);
+    if (state.phase === 'recap') return recap(state);
+    if (state.phase === 'swap-pet') return swap(state);
+    if (!run) return '';
+    if (state.phase === 'rest') return rest(run);
+    if (run.battle) return battle(state, content);
+    const here = run.map.nodes[run.roomId];
+    if (here) here.current = true;
+    Object.keys(run.map.nodes).forEach(id => {
+      if (id !== run.roomId) run.map.nodes[id].current = false;
+    });
+    let body = here.body;
+    const title = here.title;
+    if (run.mode === 'node' && content.nodes[run.nodeId]) {
+      body = content.nodes[run.nodeId].body;
+    }
+    const options = UIRPG.Run.currentOptions(state, content);
+    const exits = UIRPG.Run.exits(run).map(ex => {
+      const cls = ex.id === hot ? ' hot' : '';
+      return `<button type="button" class="${cls.trim()}" data-act="move" data-id="${esc(ex.id)}" data-dir="${esc(ex.dir)}">${esc(ex.label)}</button>`;
+    }).join('');
+    const notice = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
+    const hint = run.floor === 1 && run.roomId === 'entrance' && !run.battle
+      ? '<p class="hint">Arrows choose a passage. Enter steps through. Space settles the dice.</p>'
+      : '';
+    return `
+      ${map(run, hot)}
+      <article id="page">
+        <h2>${esc(title)}</h2>
+        <p class="prose">${esc(body)}</p>
+        ${beats(run, body)}
+        ${notice}
+        <div class="choices">${optionButtons(state, content, options)}${exits}</div>
+        ${hint}
+      </article>`;
+  }
+
+  function battle(state, content) {
+    const run = state.run;
+    const b = run.battle;
+    const foeHp = state.reveal && state.reveal.hpBefore ? state.reveal.hpBefore.foe : b.foe.hp;
+    const classDef = UIRPG.Content.byId(content.classes, run.classId);
+    const names = {
+      attack: classDef.weapon.name,
+      pet: run.pet && run.pet.trick ? run.pet.trick.name : 'Pet',
+      heal: 'Heal',
+      item: 'Item',
+      flee: 'Flee',
+    };
+    const moves = UIRPG.Run.battleMoves(run).map((id, index) =>
+      `<button type="button" data-act="battle" data-id="${esc(id)}">${index + 1} ${esc(names[id] || id)}</button>`
+    );
+    const node = run.nodeId && content.nodes[run.nodeId];
+    const lead = node && node.body ? node.body : '';
+    return `
+      ${map(run, null)}
+      <article id="page">
+        ${lead ? `<p class="prose">${esc(lead)}</p>` : ''}
+        ${beats(run, lead)}
+        <div class="battle-head">
+          <div class="who"><strong>${esc(classDef.name)}</strong>${hpBar(state.reveal && state.reveal.hpBefore ? state.reveal.hpBefore.hp : run.hp, run.maxHp)}</div>
+          <div class="who"><strong>${esc(b.foe.name)}</strong>${hpBar(foeHp, b.foe.maxHp)}<div>AC ${b.foe.ac}</div></div>
+        </div>
+        <p class="turn">${b.turn === 'player' ? 'Your turn' : esc(b.foe.name) + ' acts'}</p>
+        <div class="choices">${moves.join('')}</div>
+      </article>`;
+  }
+
+  function rest(run) {
+    return `
+      ${map(run, null)}
+      <article id="page">
+        <h2>Stairs</h2>
+        <p class="prose">${esc(run.map.nodes[run.roomId].body)}</p>
+        ${beats(run, run.map.nodes[run.roomId].body)}
+        <p>Hit dice left: ${run.hitDiceLeft}. Spending one rolls your hit die and adds Constitution.</p>
+        <div class="choices">
+          <button type="button" data-act="spend-die">Spend a hit die</button>
+          <button type="button" data-act="descend">Descend</button>
+        </div>
+      </article>`;
+  }
+
+  function rollSlots(rolls) {
+    const slots = [];
+    for (let i = 0; i < 6; i++) {
+      if (i < rolls.length) slots.push(`<span class="roll-chip filled">${rolls[i]}</span>`);
+      else slots.push('<span class="roll-chip"></span>');
+    }
+    return `<div class="chip-row">${slots.join('')}</div>`;
+  }
+
+  function rolling(state) {
+    const n = state.creation.rolls.length;
+    return `<article id="page"><h2>Roll ${Math.min(n + 1, 6)} of 6</h2><p class="prose">4d6, drop the lowest. The tray keeps the discarded die.</p>${rollSlots(state.creation.rolls)}<button type="button" data-act="roll-ability">Roll</button></article>`;
+  }
+
+  function assigning(state, content, held) {
+    const classDef = UIRPG.Content.byId(content.classes, state.creation.classId);
+    const creation = state.creation;
+    const placed = {};
+    Object.keys(creation.assignments).forEach(key => { placed[creation.assignments[key]] = key; });
+    const chips = creation.rolls.map((roll, index) => {
+      if (placed[index]) return '';
+      const on = held === index ? ' held' : '';
+      return `<button type="button" class="roll-chip${on}" data-act="hold-roll" data-index="${index}" data-value="${roll}">${roll}</button>`;
+    }).join('');
+    const slots = UIRPG.Sheet.ABILITIES.map(key => {
+      const index = creation.assignments[key];
+      const value = index == null ? 'Place' : creation.rolls[index];
+      const primary = key === classDef.primary ? ' primary' : '';
+      const name = key === classDef.primary ? ' · primary' : '';
+      return `<button type="button" class="place${primary}" data-act="place" data-ability="${key}"><span>${UIRPG.Sheet.LABELS[key]}${name}</span><span class="placed">${value}</span></button>`;
+    }).join('');
+    const note = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
+    return `<article id="page"><h2>${esc(classDef.name)}</h2><p class="prose">Place each roll. The high one wants ${esc(UIRPG.Sheet.NAMES[classDef.primary])}.</p><div class="chip-row">${chips}</div><div class="place-list">${slots}</div>${note}<button type="button" data-act="confirm-assign">Begin</button></article>`;
+  }
+
+  function recap(state) {
+    const r = state.recap || {};
+    const unlocks = (r.unlocks || []).filter(Boolean);
+    const earned = unlocks.length ? `<p class="prose">${esc(unlocks.join(' '))}</p>` : '';
+    const blow = r.blow || 'The dark';
+    const theme = r.theme || 'the delve';
+    return `<article id="page"><h2>The run ends</h2><p class="prose">${esc(blow)} ends it, on floor ${esc(r.floor)} of ${esc(theme)}.</p>${earned}<p class="seed">Seed ${esc(r.seed)}</p><button type="button" data-act="to-table">Return to the table</button></article>`;
+  }
+
+  function swap(state) {
+    const pet = state.run && state.run.pet;
+    return `<article id="page"><h2>A companion</h2><p class="prose">${esc(state.petOffer.name)} waits. You already travel with ${esc(pet ? pet.name : 'no one')}.</p><button type="button" data-act="take-pet">Take ${esc(state.petOffer.name)}</button><button type="button" data-act="keep-pet">Keep yours</button></article>`;
+  }
+
+  function table(user, state, content, picking) {
+    const meta = state.meta;
+    const unlocks = (content.unlocks || []).map(u => {
+      const known = meta.unlocks.indexOf(u.id) !== -1;
+      return `<div class="${known ? 'known' : ''}">${esc(known ? u.name : u.hint)}</div>`;
+    }).join('');
+    const cont = state.run ? `<button type="button" data-act="continue">Continue · floor ${state.run.floor}</button>` : '';
+    const admin = user.admin ? `<button type="button" data-act="open-admin">Add content</button>` : '';
+    const leave = user.local ? '' : `<button type="button" data-act="logout">Log out</button>`;
+    const notice = state.notice ? `<p class="notice">${esc(state.notice)}</p>` : '';
+    return `
+      <div id="table-screen">
+        <div class="card">
+          <h2>The table</h2>
+          <p>One run at a time. Death ends it. What you unlock waits for the next.</p>
+          ${notice}
+          ${cont}
+          <button type="button" data-act="new-run">New run</button>
+          ${admin}
+          ${leave}
+          <div class="unlocks">${unlocks}</div>
+          <div id="class-pick"${picking ? '' : ' hidden'}>
+            <h3>Class</h3>
+            ${(content.classes || []).filter(c => UIRPG.Meta.classOpen(c, meta)).map(c =>
+              `<button type="button" data-act="pick-class" data-id="${esc(c.id)}">${esc(c.name)}</button>`
+            ).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function auth() {
+    return `
+      <div id="auth">
+        <div class="card">
+          <h2>Sit down</h2>
+          <form id="login-form">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="username" required>
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8">
+            <label for="name">Name, if this is your first time</label>
+            <input id="name" name="name" type="text" maxlength="40" autocomplete="nickname">
+            <p id="auth-error" class="scene-fail"></p>
+            <button type="submit" data-act="login">Log in</button>
+            <button type="button" data-act="register">Register</button>
+          </form>
+        </div>
+      </div>`;
+  }
+
+  function diceFace(sides, face, lit) {
+    const cls = (lit === true ? ' lit' : lit === false ? ' dim' : '') + (sides === 6 ? ' square' : '');
+    return `<div class="token${cls}" data-sides="${sides}"><span class="pip">${face}</span><span class="sides">d${sides}</span></div>`;
+  }
+
+  function dice(reveal) {
+    if (!reveal || !reveal.rolls || !reveal.rolls.length) return { html: '', crit: false, fumble: false };
+    let crit = false;
+    let fumble = false;
+    const bits = [];
+    reveal.rolls.forEach(roll => {
+      if (roll.crit) crit = true;
+      if (roll.fumble) fumble = true;
+      const faces = roll.faces || [];
+      const tokens = [];
+      if (roll.advantage || roll.disadvantage) {
+        faces.forEach(face => {
+          const kept = face === roll.kept;
+          tokens.push(diceFace(20, face, kept));
+        });
+      } else if (roll.dropped && roll.dropped.length && roll.faces) {
+        roll.faces.forEach(face => {
+          const dropped = roll.dropped.indexOf(face) !== -1 && roll.kept.indexOf(face) === -1;
+          tokens.push(diceFace(roll.sides, face, dropped ? false : true));
+        });
+      } else {
+        faces.forEach(face => tokens.push(diceFace(roll.sides, face, null)));
+      }
+      const parts = (roll.parts || []).map(p => `${p.label} (${p.value >= 0 ? '+' : ''}${p.value})`).join(' ');
+      const note = roll.note || reveal.text || '';
+      bits.push(`<div class="roll">${tokens.join('')}<div class="formula">${esc(roll.expr || '')} ${faces.join(' ')} ${esc(parts)} = ${roll.total}${note ? ' · ' + esc(note) : ''}</div></div>`);
+    });
+    return { html: bits.join(''), crit, fumble };
+  }
+
+  function paint(view) {
+    const stage = $('stage');
+    const sheetEl = $('sheet');
+    const who = $('who');
+    const tray = $('tray');
+    const diceEl = $('dice');
+    const chronicle = $('chronicle');
+    who.innerHTML = view.user && !view.user.local ? `${esc(view.user.name || view.user.email)} <button type="button" data-act="logout">Log out</button>` : '';
+    if (!view.user) {
+      sheetEl.hidden = true;
+      sheetEl.innerHTML = '';
+      stage.innerHTML = auth();
+      tray.classList.add('closed');
+      diceEl.innerHTML = '';
+      chronicle.textContent = '';
+      return;
+    }
+    if (view.adminOpen) {
+      sheetEl.hidden = true;
+      stage.innerHTML = UIRPG.UI.Content.form();
+    } else if (!view.state.run && (view.state.phase === 'table' || view.state.phase === 'recap' && !view.state.recap)) {
+      sheetEl.hidden = true;
+      stage.innerHTML = table(view.user, view.state, view.content, view.picking);
+    } else if (view.state.phase === 'recap') {
+      sheetEl.hidden = true;
+      stage.innerHTML = recap(view.state);
+    } else if (view.state.phase === 'table') {
+      sheetEl.hidden = true;
+      stage.innerHTML = table(view.user, view.state, view.content, view.picking);
     } else {
-      invListEl.classList.remove('hidden');
-      currencyListEl.classList.add('hidden');
-
-      const items = isInv ? s.inventory : s.bank;
-      let filtered = items;
-      if (activeFilter !== 'all') {
-        filtered = items.filter(item => item.kind === activeFilter);
-      }
-      if (!filtered.length) {
-        invListEl.innerHTML = '<div class="empty-text">empty</div>';
-      } else {
-        const idxMap = new Map();
-        items.forEach((item, i) => idxMap.set(item, i));
-        const sorted = [...filtered].sort((a, b) => primaryValue(b) - primaryValue(a) || 0);
-        invListEl.innerHTML = sorted.map((item) => {
-          const origIdx = idxMap.get(item);
-          let d = displayName(item);
-          const b = itemStats(item);
-          const w = weaponStats(item);
-          const extras = w.concat(item.kind === 'main_hand' ? b.filter(s => !WEAPON_STAT_SKIP.some(k => s.includes(k))) : b);
-          if (extras.length) d += ` (${extras.join(', ')})`;
-          const lockIcon = item.locked ? ' ◆' : '';
-          const kindLabel = (item.kind || '?').charAt(0).toUpperCase() + (item.kind || '?').slice(1);
-          return `<div class="inv-item ${rarityClass(item.rarity)}" data-idx="${origIdx}" draggable="true">${esc(d)}${lockIcon}<span class="item-action">[${kindLabel}]</span></div>`;
-        }).join('');
-      }
+      sheetEl.hidden = !view.state.run;
+      sheetEl.innerHTML = view.state.run ? sheet(view.state, view.content, view.sheetOpen) : '';
+      stage.innerHTML = page(view.state, view.content, view.hotExit || null, view.held);
     }
-  }
-
-  function all() {
-    const s = window.__state;
-    if (!s) return;
-    if (!Array.isArray(s.gameLog)) s.gameLog = [];
-    const p = s.player;
-
-    $('player-name').textContent = p.name || 'Adventurer';
-    $('level').textContent = p.level;
-    $('gold').textContent = p.gold;
-
-    const ue = $('unspent-stats');
-    const sp = p.statPoints;
-    const auto = s.autoStatMode && s.autoStatMode !== 'off';
-    if (auto && sp === 0) ue.textContent = 'Auto: ON';
-    else ue.textContent = sp > 0 ? `${sp} unspent!` : `0 pts`;
-    ue.className = 'unspent visible';
-
-    $('hp-text').textContent = `${Math.max(0, p.hp)}/${UIRPG.State.computeStats(s).maxHp}`;
-
-    const hpPct = UIRPG.State.computeStats(s).maxHp > 0 ? (Math.max(0, p.hp) / UIRPG.State.computeStats(s).maxHp * 100) : 0;
-    const xpPct = p.xpNext > 0 ? (p.xp / p.xpNext * 100) : 0;
-    $('player-hp-bar').style.width = `${hpPct}%`;
-    $('xp-bar').style.width = `${Math.min(100, xpPct)}%`;
-
-    if (s.activity === 'fish') {
-      renderFishingUI(s);
+    sheetEl.classList.toggle('open', !!view.sheetOpen);
+    const shown = dice(view.state && view.state.reveal);
+    if (shown.html) {
+      tray.classList.remove('closed');
+      tray.classList.toggle('crit', shown.crit);
+      tray.classList.toggle('fumble', shown.fumble);
+      diceEl.innerHTML = shown.html;
+      if (shown.fumble) diceEl.classList.add('shake');
+      else diceEl.classList.remove('shake');
     } else {
-      renderCombatUI(s);
+      tray.classList.add('closed');
+      tray.classList.remove('crit', 'fumble');
+      diceEl.innerHTML = '';
     }
-
-    renderLog($('game-log'), s.gameLog);
-    renderEquipment(s);
-    renderInventory(s);
-    renderActionBar(s);
-
-    const autoEquipToggle = document.querySelector('.auto-equip-toggle');
-    if (autoEquipToggle) {
-      autoEquipToggle.textContent = s.autoEquipEnabled ? '[Auto: On]' : '[Auto: Off]';
-    }
+    chronicle.textContent = '';
   }
 
-  return { all, displayName, weaponStats, showCompare, hideCompare };
+  return { paint };
 })();

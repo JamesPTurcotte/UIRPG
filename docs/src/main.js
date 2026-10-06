@@ -1,590 +1,434 @@
-(function () {
-  const AUTO_CYCLE = ['off', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Unique'];
+(() => {
+  const view = {
+    user: null,
+    state: UIRPG.Run.session(),
+    content: UIRPG.Content.clone(),
+    adminOpen: false,
+    picking: false,
+    hotExit: null,
+    hotIndex: 0,
+    held: null,
+    sheetOpen: false,
+  };
+  let revealTimer = null;
 
-  const SAVE_INTERVAL = 5000;
-
-  let state = null;
-  let frameId = null;
-  let lastTime = 0;
-  let unsubHardcore = null;
-  let unsubAutoEquip = null;
-  let lastSave = 0;
-  let dragIdx = -1;
-  let dragHappened = false;
-  let clickCandidate = null;
-  let dragEquipSlot = null;
-
-  let listenersRegistered = false;
-
-  function init() {
-    if (!listenersRegistered) {
-      listenersRegistered = true;
-      document.addEventListener('click', onClick);
-      document.addEventListener('dragstart', onDragStart);
-      document.addEventListener('dragover', onDragOver);
-      document.addEventListener('drop', onDrop);
-      document.addEventListener('dragend', onDragEnd);
-      document.addEventListener('click', function(e) {
-        if (!document.body.contains(e.target)) return;
-        if (!e.target.closest('.dropdown')) closeMenus();
-      });
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          if (state) {
-            state.saveTime = Date.now();
-            UIRPG.Sync.syncOnClose(state);
-          }
-        } else {
-          const now = Date.now();
-          const elapsed = now - (state?.saveTime || now);
-          if (elapsed > SAVE_INTERVAL) {
-            const OFFLINE_MODAL_MIN = 60000;
-            const summary = UIRPG.Engine.simulateOffline(state, elapsed);
-            state.saveTime = now;
-            UIRPG.Characters.saveCharacterState(state);
-            render();
-            if (summary && summary.elapsed > 0 && elapsed > OFFLINE_MODAL_MIN) {
-              UIRPG.UI.Modal.openOfflineSummary(summary);
-            }
-          }
-        }
-      });
-    }
-
-    // Show character selection
-    const characters = UIRPG.Characters.getCharacterList();
-    UIRPG.UI.Modal.openCharacterSelect(loadAndStartCharacter);
+  function paint() {
+    UIRPG.UI.Render.paint(view);
+    armReveal();
   }
 
-  let uiReady = false;
+  function armReveal() {
+    clearTimeout(revealTimer);
+    if (!view.state || !view.state.reveal) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    revealTimer = setTimeout(() => {
+      view.state.reveal = null;
+      UIRPG.UI.Render.paint(view);
+    }, reduced ? 500 : 1700);
+  }
 
-  function loadAndStartCharacter(characterId) {
-    state = UIRPG.Characters.loadCharacter(characterId);
-    if (!state) {
-      state = UIRPG.State.create();
+  function dismissReveal() {
+    if (!view.state || !view.state.reveal) return;
+    clearTimeout(revealTimer);
+    view.state.reveal = null;
+    UIRPG.UI.Render.paint(view);
+  }
+
+  async function api(url, options) {
+    const opts = options || {};
+    const res = await fetch(url, {
+      method: opts.method || 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const error = new Error(data.error || 'Request failed');
+      error.data = data;
+      error.status = res.status;
+      throw error;
     }
+    return data;
+  }
 
-    window.__state = state;
+  function adopt(me) {
+    view.user = me.user;
+    view.content = me.content;
+    view.adminOpen = false;
+    view.picking = false;
+    const loaded = UIRPG.Run.fromSave({
+      run: me.run,
+      meta: me.meta,
+      phase: me.phase,
+      recap: me.recap,
+    }, me.content);
+    view.state = loaded.state;
+    if (!loaded.ok && loaded.state.notice) view.state.notice = loaded.state.notice;
+  }
 
-    // Auto-restore Drive session + check for newer saves
-    if (UIRPG.Drive.init()) {
-      UIRPG.Sync.downloadAll(state).then(merged => {
-        if (merged) {
-          state.saveTime = Date.now();
-          UIRPG.Save.save(state);
-          render();
-        }
-      });
+  function storeKey(name) {
+    let path = location.pathname || '/';
+    if (path.endsWith('index.html')) path = path.slice(0, -'index.html'.length);
+    if (!path.endsWith('/')) path += '/';
+    return 'uirpg:' + path + name;
+  }
+
+  function readLocal(key) {
+    try {
+      const raw = localStorage.getItem(storeKey(key));
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      return null;
     }
+  }
 
-    const now = Date.now();
-    const elapsed = state.saveTime ? now - state.saveTime : 0;
-    const OFFLINE_MODAL_MIN = 60000;
-    if (elapsed > SAVE_INTERVAL) {
-      const summary = UIRPG.Engine.simulateOffline(state, elapsed);
-      if (summary && summary.elapsed > 0 && elapsed > OFFLINE_MODAL_MIN) {
-        UIRPG.UI.Modal.openOfflineSummary(summary);
+  function writeLocal(key, value) {
+    localStorage.setItem(storeKey(key), JSON.stringify(value));
+  }
+
+  function localContent() {
+    const stored = readLocal('content');
+    if (!stored) return { content: UIRPG.Content.clone(), notice: '' };
+    const checked = UIRPG.Content.validate(stored);
+    if (!checked.ok) return { content: UIRPG.Content.clone(), notice: 'Saved story could not be read. Using the built-in story.' };
+    return { content: stored, notice: '' };
+  }
+
+  function bootLocal() {
+    const story = localContent();
+    view.user = { name: 'You', admin: true, local: true };
+    view.content = story.content;
+    const loaded = UIRPG.Run.fromSave(readLocal('save') || {}, view.content);
+    view.state = loaded.state;
+    if (story.notice) view.state.notice = story.notice;
+    else if (!loaded.ok && loaded.state.notice) view.state.notice = loaded.state.notice;
+    paint();
+  }
+
+  async function save() {
+    if (view.user && view.user.local) {
+      try {
+        writeLocal('save', UIRPG.Run.toSave(view.state));
+      } catch (err) {
+        throw new Error('This browser did not keep the save.');
       }
+      return;
     }
-    state.saveTime = now;
+    if (!view.user) return;
+    const body = UIRPG.Run.toSave(view.state);
+    await api('/api/save', { method: 'PUT', body });
+  }
 
-    UIRPG.Characters.saveCharacterState(state);
-
-    if (!uiReady) {
-      uiReady = true;
-      UIRPG.UI.Layout.init();
-      document.getElementById('inv-toolbar').addEventListener('mousedown', function(e) {
-        if (e.target.classList.contains('inv-filter')) {
-          const filter = e.target.dataset.filter;
-          if (filter) { UIRPG.Actions.setFilter(state, filter); UIRPG.Characters.saveCharacterState(state); UIRPG.UI.Render.all(); }
+  async function boot() {
+    try {
+      const me = await api('/api/me');
+      if (me && Object.prototype.hasOwnProperty.call(me, 'user')) {
+        if (!me.user) {
+          view.user = null;
+          paint();
           return;
         }
-        const tab = e.target.closest('[data-tab]');
-        if (tab) {
-          const t = tab.dataset.tab;
-          if (t && t !== state.activeTab) { UIRPG.Actions.switchTab(state, t); UIRPG.Characters.saveCharacterState(state); UIRPG.UI.Render.all(); }
-        }
-      });
-      document.getElementById('inventory-list').addEventListener('mousedown', function(e) {
-        const itemEl = e.target.closest('.inv-item');
-        if (!itemEl) return;
-        clickCandidate = { idx: parseInt(itemEl.dataset.idx), source: state.activeTab === 'bank' ? 'bank' : 'inv', didDrag: false };
-      });
-      document.getElementById('equip-panel').addEventListener('mousedown', function(e) {
-        if (e.target.closest('[data-action="toggle-equip-lock"]')) return;
-        const slot = e.target.closest('.equip-slot');
-        if (!slot) return;
-        const kind = slot.dataset.kind;
-        if (!state.equipment[kind]) return;
-        clickCandidate = { idx: kind, source: 'equip', didDrag: false };
-      });
-      document.getElementById('equip-panel').addEventListener('dragstart', function(e) {
-        const slot = e.target.closest('.equip-slot');
-        if (!slot) return;
-        const kind = slot.dataset.kind;
-        if (!state.equipment[kind]) return;
-        dragEquipSlot = kind;
-        if (clickCandidate) clickCandidate.didDrag = true;
-        dragHappened = true;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', kind);
-      });
-      document.addEventListener('mouseup', function(e) {
-        if (clickCandidate && !clickCandidate.didDrag) {
-          const c = clickCandidate;
-          clickCandidate = null;
-          if (c.source === 'equip') { UIRPG.UI.Crafting.open(state, c.idx, 'equip'); }
-          else { const arr = c.source === 'bank' ? state.bank : state.inventory; if (arr[c.idx]) UIRPG.UI.Crafting.open(state, c.idx, c.source); }
-        } else { clickCandidate = null; }
-      });
-      document.getElementById('inventory-list').addEventListener('mouseover', function(e) {
-        const itemEl = e.target.closest('.inv-item');
-        if (!itemEl) { UIRPG.UI.Render.hideCompare(); return; }
-        const idx = parseInt(itemEl.dataset.idx);
-        const source = state.activeTab === 'bank' ? 'bank' : 'inv';
-        const arr = source === 'bank' ? state.bank : state.inventory;
-        if (!arr[idx]) { UIRPG.UI.Render.hideCompare(); return; }
-        UIRPG.UI.Render.showCompare(state, arr[idx], e.clientX, e.clientY);
-      });
-      document.getElementById('inventory-list').addEventListener('mouseleave', function() { UIRPG.UI.Render.hideCompare(); });
-
-      UIRPG.UI.Surface.wrapAll({
-        'action-square': { title: '' },
-        'equip-panel': { title: '' },
-        'logs-area': { title: '' },
-        'inventory-panel': { title: '' },
-      });
-    }
-
-    if (!state.player.name || state.player.name === 'Adventurer') {
-      UIRPG.UI.Modal.openName(state.player.name || 'Adventurer', name => {
-        state.player.name = name;
-        UIRPG.Save.save(state);
-        UIRPG.UI.Render.all();
-      });
-    }
-
-    if (frameId) cancelAnimationFrame(frameId);
-    lastTime = performance.now();
-    frameId = requestAnimationFrame(loop);
-
-    if (unsubHardcore) unsubHardcore();
-    if (unsubAutoEquip) unsubAutoEquip();
-
-    unsubHardcore = UIRPG.Events.on('player:hardcoreDeath', () => {
-      if (frameId) cancelAnimationFrame(frameId);
-      frameId = null;
-      state = null;
-      UIRPG.UI.Modal.openCharacterSelect(loadAndStartCharacter);
-    });
-
-    let autoEquipGuard = false;
-    unsubAutoEquip = UIRPG.Events.on('inventory:changed', () => {
-      if (state && state.autoEquipEnabled && !autoEquipGuard) {
-        autoEquipGuard = true;
-        UIRPG.Actions.autoEquip(state);
-        autoEquipGuard = false;
-      }
-    });
-  }
-
-  function closeMenus() {
-    document.querySelectorAll('.dropdown-menu').forEach(m => {
-      m.classList.remove('open', 'flip-up');
-    });
-  }
-
-  function loop(now) {
-    if (!state) return;
-    const dt = Math.min(now - lastTime, 100);
-    lastTime = now;
-
-    UIRPG.Engine.resolveTick(state, dt);
-    render();
-    if (now - lastSave >= SAVE_INTERVAL) {
-      lastSave = now;
-      state.saveTime = Date.now();
-      UIRPG.Save.save(state);
-    }
-
-    frameId = requestAnimationFrame(loop);
-  }
-
-  function render() {
-    if (!state) return;
-    UIRPG.UI.Render.all();
-  }
-
-  function onClick(e) {
-    const target = e.target;
-
-    if (target === document.getElementById('player-name') || target.closest('#player-name')) {
-      UIRPG.UI.Modal.openResetConfirm(state);
-      return;
-    }
-
-    if (target.classList.contains('title') || target.closest('.title')) {
-      UIRPG.UI.Modal.openCharacterSelect(loadAndStartCharacter);
-      return;
-    }
-
-    if (target.classList.contains('inv-auto')) {
-      const cur = state.autoSalvage || 'off';
-      const idx = AUTO_CYCLE.indexOf(cur);
-      const next = AUTO_CYCLE[(idx + 1) % AUTO_CYCLE.length];
-      UIRPG.Actions.setAutoSalvage(state, next);
-      saveAndRender();
-      return;
-    }
-
-    const el = e.target.closest('[data-action]');
-    if (!el) return;
-
-    const action = el.dataset.action;
-
-    function showMenu(menu) {
-      document.querySelectorAll('.dropdown-menu.open').forEach(m => {
-        if (m !== menu) { m.classList.remove('open', 'flip-up'); }
-      });
-      menu.classList.remove('flip-up');
-      menu.classList.add('open');
-      void menu.offsetHeight;
-      if (menu.getBoundingClientRect().bottom > window.innerHeight - 4) {
-        menu.classList.add('flip-up');
-      }
-    }
-
-    if (action === 'switch-fight') {
-      const menu = document.getElementById('zone-dropdown-menu');
-      if (menu) {
-        menu.innerHTML =
-          `<div class="dropdown-item" data-action="fight-select-zones">Zones <span class="locked" style="font-size:var(--font-size-sm);">[${UIRPG.Utils.esc(state.zone)}]</span></div>` +
-          `<div class="dropdown-item">Dungeon</div>`;
-        showMenu(menu);
-      }
-      UIRPG.Actions.setActivity(state, 'fight');
-      saveAndRender();
-    } else if (action === 'fight-select-zones') {
-      const menu = document.getElementById('zone-dropdown-menu');
-      if (menu) {
-        menu.innerHTML =
-          `<div class="dropdown-item" data-action="fight-back-to-main">◀ Back</div>` +
-          UIRPG.Data.ZONES.map(z =>
-            `<div class="dropdown-item ${z.name === state.zone ? 'active' : ''}" data-action="select-zone" data-value="${UIRPG.Utils.esc(z.name)}">${UIRPG.Utils.esc(z.name)}</div>`
-          ).join('');
-        showMenu(menu);
-      }
-      saveAndRender();
-    } else if (action === 'fight-back-to-main') {
-      const menu = document.getElementById('zone-dropdown-menu');
-      if (menu) {
-        menu.innerHTML =
-          `<div class="dropdown-item" data-action="fight-select-zones">Zones <span class="locked" style="font-size:var(--font-size-sm);">[${UIRPG.Utils.esc(state.zone)}]</span></div>` +
-          `<div class="dropdown-item">Dungeon</div>`;
-        showMenu(menu);
-      }
-      saveAndRender();
-    } else if (action === 'switch-fish') {
-      UIRPG.Actions.setActivity(state, 'fish');
-      const menu = document.getElementById('fish-dropdown-menu');
-      if (menu) {
-        const fp = UIRPG.Fishing.fishingPower(state);
-        menu.innerHTML = UIRPG.Data.FISHING_SPOTS.map(sp => {
-          const locked = fp < (sp.minFishingPower || 0);
-          const req = sp.minFishingPower ? ` [FP ${sp.minFishingPower}]` : '';
-          return `<div class="dropdown-item ${sp.id === state.fishingSpot ? 'active' : ''}" data-action="select-fish-spot" data-value="${UIRPG.Utils.esc(sp.id)}"${locked ? ' data-locked=""' : ''}>${UIRPG.Utils.esc(sp.name)}${req}</div>`;
-        }).join('');
-        showMenu(menu);
-      }
-      saveAndRender();
-    } else if (action === 'select-zone') {
-      const name = el.dataset.value;
-      if (name && !el.hasAttribute('data-locked')) {
-        UIRPG.Actions.changeZone(state, name);
-        closeMenus();
-        saveAndRender();
-      }
-    } else if (action === 'select-fish-spot') {
-      const id = el.dataset.value;
-      if (id && !el.hasAttribute('data-locked')) {
-        UIRPG.Actions.changeFishingSpot(state, id);
-        closeMenus();
-        saveAndRender();
-      }
-    } else if (action === 'stats') {
-      UIRPG.UI.Modal.openStats(state);
-    } else if (action === 'change-zone') {
-      UIRPG.Actions.changeZone(state, el.dataset.zone);
-      saveAndRender();
-      UIRPG.UI.Modal.close();
-    } else if (action === 'allocate') {
-      UIRPG.Actions.allocateStat(state, el.dataset.stat);
-      saveAndRender();
-      UIRPG.UI.Modal.openStats(state);
-    } else if (action === 'reset-stats') {
-      UIRPG.Actions.resetStats(state);
-      saveAndRender();
-      UIRPG.UI.Modal.openStats(state);
-    } else if (action === 'spread-stats') {
-      UIRPG.Actions.spreadStats(state);
-      saveAndRender();
-      UIRPG.UI.Modal.openStats(state);
-    } else if (action === 'close-modal') {
-      UIRPG.UI.Modal.close();
-    } else if (action === 'salvage') {
-      UIRPG.UI.Modal.openSalvage(state, () => {
-        UIRPG.Actions.salvageAll(state);
-        saveAndRender();
-      });
-    } else if (action === 'enchant-item') {
-      if (el.classList.contains('disabled')) return;
-      const idx = el.dataset.idx;
-      const source = el.dataset.source || 'inv';
-      if (source === 'equip') {
-        UIRPG.Actions.enchantEquipped(state, idx);
-      } else {
-        const arr = source === 'bank' ? state.bank : state.inventory;
-        UIRPG.Actions.enchantItem(state, parseInt(idx), arr);
-      }
-      saveAndRender();
-      UIRPG.UI.Crafting.open(state, source === 'equip' ? idx : parseInt(idx), source);
-    } else if (action === 'equip-item') {
-      const idx = parseInt(el.dataset.idx);
-      const source = el.dataset.source || 'inv';
-      const arr = source === 'bank' ? state.bank : state.inventory;
-      UIRPG.Actions.equipItem(state, idx, arr);
-      saveAndRender();
-      UIRPG.UI.Modal.close();
-    } else if (action === 'unequip-item') {
-      const slot = el.dataset.idx;
-      UIRPG.Actions.unequipItem(state, slot);
-      saveAndRender();
-      UIRPG.UI.Modal.close();
-    } else if (action === 'salvage-item') {
-      const idx = parseInt(el.dataset.idx);
-      UIRPG.Actions.salvageItem(state, idx);
-      saveAndRender();
-      UIRPG.UI.Modal.close();
-    } else if (action === 'toggle-lock') {
-      const idx = parseInt(el.dataset.idx);
-      const source = el.dataset.source || 'inv';
-      const arr = source === 'bank' ? state.bank : state.inventory;
-      UIRPG.Actions.toggleLock(state, idx, arr);
-      saveAndRender();
-      UIRPG.UI.Crafting.open(state, idx, source);
-    } else if (action === 'auto-equip') {
-      UIRPG.Actions.autoEquip(state);
-      saveAndRender();
-    } else if (action === 'toggle-auto-equip') {
-      UIRPG.Actions.setAutoEquip(state);
-      saveAndRender();
-    } else if (action === 'toggle-equip-lock') {
-      const slot = el.dataset.slot;
-      if (slot) {
-        UIRPG.Actions.toggleEquipLock(state, slot);
-        saveAndRender();
-      }
-    } else if (action === 'set-auto-stat') {
-      state.autoStatMode = el.dataset.value;
-      saveAndRender();
-      UIRPG.UI.Modal.openStats(state);
-    } else if (action === 'settings') {
-      UIRPG.UI.Settings.open(state);
-    } else if (action === 'export-save') {
-      UIRPG.LocalFile.exportSave(state);
-    } else if (action === 'import-save') {
-      UIRPG.LocalFile.importSave(imported => {
-        Object.assign(state, imported);
-        state.saveTime = Date.now();
-        UIRPG.Save.save(state);
-        UIRPG.UI.Modal.close();
-        UIRPG.UI.Render.all();
-      });
-    } else if (action === 'cloud-sign-in') {
-      UIRPG.Drive.signIn().then(() => {
-        UIRPG.UI.Modal.close();
-        UIRPG.UI.Settings.open(state);
-        saveAndRender();
-      }).catch((err) => {
-        UIRPG.UI.Modal.close();
-        UIRPG.UI.Settings.open(state, err.message || 'Sign-in failed');
-      });
-    } else if (action === 'cloud-sign-out') {
-      UIRPG.Drive.signOut();
-      UIRPG.UI.Modal.close();
-      saveAndRender();
-    } else if (action === 'sync-now') {
-      UIRPG.Sync.uploadAll(state).then(() => {
-        UIRPG.UI.Modal.close();
-        UIRPG.UI.Settings.open(state);
-        saveAndRender();
-      });
-    }
-  }
-
-  function onDragStart(e) {
-    const el = e.target.closest('.inv-item');
-    if (!el) return;
-    if (clickCandidate) clickCandidate.didDrag = true;
-    dragIdx = parseInt(el.dataset.idx);
-    dragHappened = true;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(dragIdx));
-  }
-
-  function onDragOver(e) {
-    document.querySelectorAll('.drag-over, .drag-over-tab').forEach(el => el.classList.remove('drag-over', 'drag-over-tab'));
-    const tab = e.target.closest('[data-tab]');
-    const slot = e.target.closest('.equip-slot');
-    const overInventory = e.target.closest('#inventory-list');
-    if (overInventory) {
-      e.preventDefault();
-    }
-    if (tab) {
-      e.preventDefault();
-      tab.classList.add('drag-over', 'drag-over-tab');
-    }
-    if (slot) {
-      e.preventDefault();
-      slot.classList.add('drag-over');
-    }
-  }
-
-  function onDrop(e) {
-    document.querySelectorAll('.drag-over, .drag-over-bank, .drag-over-tab').forEach(el => el.classList.remove('drag-over', 'drag-over-bank', 'drag-over-tab'));
-
-    // Handle equipment slot drag to inventory or bank
-    if (dragEquipSlot) {
-      const slot = dragEquipSlot;
-      dragEquipSlot = null;
-
-      // Drop on inventory list
-      const invList = e.target.closest('#inventory-list');
-      if (invList) {
-        const item = state.equipment[slot];
-        if (item) {
-          const cap = state.activeTab === 'bank' ? UIRPG.State.bankCap(state) : UIRPG.State.invCap(state);
-          const arr = state.activeTab === 'bank' ? state.bank : state.inventory;
-          if (arr.length < cap) {
-            if (item.kind === 'fish' && item.maxUses) item.uses = item.maxUses;
-            state.equipment[slot] = null;
-            arr.push(item);
-            UIRPG.State.addGameLog(state, `Unequipped ${UIRPG.Drops.displayName(item)}`, 'subtle');
-            const stats = UIRPG.State.computeStats(state);
-            if (state.player.hp > stats.maxHp) state.player.hp = stats.maxHp;
-            UIRPG.Events.emit('inventory:changed');
-            UIRPG.Events.emit('equipment:changed');
-            saveAndRender();
-          }
-        }
+        adopt(me);
+        paint();
         return;
       }
+    } catch (err) {
+      // No account server. GitHub Pages and a plain index.html play from this browser.
+    }
+    bootLocal();
+  }
 
-      // Drop on bank tab
-      const tab = e.target.closest('[data-tab]');
-      if (tab && tab.dataset.tab === 'bank') {
-        const item = state.equipment[slot];
-        if (item) {
-          const cap = UIRPG.State.bankCap(state);
-          if (state.bank.length < cap) {
-            if (item.kind === 'fish' && item.maxUses) item.uses = item.maxUses;
-            state.equipment[slot] = null;
-            state.bank.push(item);
-            UIRPG.State.addGameLog(state, `Moved ${UIRPG.Drops.displayName(item)} to bank`, 'subtle');
-            const stats = UIRPG.State.computeStats(state);
-            if (state.player.hp > stats.maxHp) state.player.hp = stats.maxHp;
-            UIRPG.Events.emit('inventory:changed');
-            UIRPG.Events.emit('equipment:changed');
-            saveAndRender();
-          }
-        }
+  function exits() {
+    if (!view.state.run || view.state.run.battle) return [];
+    return UIRPG.Run.exits(view.state.run);
+  }
+
+  async function after(fn) {
+    let result = null;
+    try {
+      result = await fn();
+    } catch (err) {
+      view.state.notice = err.message;
+    }
+    paint();
+    try { await save(); } catch (err) { view.state.notice = err.message; paint(); }
+    return result;
+  }
+
+  document.body.addEventListener('click', (event) => {
+    if (view.state && view.state.reveal) {
+      const settling = event.target.closest('[data-act]');
+      const settlingAct = settling && settling.dataset.act;
+      if (settlingAct !== 'modal-yes' && settlingAct !== 'modal-no') {
+        dismissReveal();
         return;
       }
+    }
+    const target = event.target.closest('[data-act]');
+    if (!target) return;
+    const act = target.dataset.act;
+    if (act === 'login') return;
+    if (act === 'modal-no') {
+      UIRPG.UI.Modal.close();
+      return;
+    }
+    if (act === 'modal-yes') {
+      UIRPG.UI.Modal.close();
+      UIRPG.Run.abandon(view.state);
+      view.picking = false;
+      after(() => {});
+      return;
+    }
+    if (view.state && view.state.reveal && act !== 'roll-ability') dismissReveal();
+    handle(act, target, event);
+  });
 
-      // Drop on inv tab
-      if (tab && tab.dataset.tab === 'inv') {
-        const item = state.equipment[slot];
-        if (item) {
-          const cap = UIRPG.State.invCap(state);
-          if (state.inventory.length < cap) {
-            if (item.kind === 'fish' && item.maxUses) item.uses = item.maxUses;
-            state.equipment[slot] = null;
-            state.inventory.push(item);
-            UIRPG.State.addGameLog(state, `Moved ${UIRPG.Drops.displayName(item)} to inventory`, 'subtle');
-            const stats = UIRPG.State.computeStats(state);
-            if (state.player.hp > stats.maxHp) state.player.hp = stats.maxHp;
-            UIRPG.Events.emit('inventory:changed');
-            UIRPG.Events.emit('equipment:changed');
-            saveAndRender();
-          }
-        }
+  document.body.addEventListener('change', (event) => {
+    if (event.target.id !== 'kind') return;
+    const area = document.getElementById('entry');
+    if (area && UIRPG.UI.Content.sample) area.value = UIRPG.UI.Content.sample(event.target.value);
+  });
+
+  document.body.addEventListener('mouseover', (event) => {
+    const ability = event.target.closest('[data-ability]');
+    document.querySelectorAll('.ability').forEach(el => {
+      el.classList.toggle('lit', !!(ability && el.dataset.ability === ability.dataset.ability));
+    });
+    const door = event.target.closest('[data-dir]');
+    document.querySelectorAll('.room-node').forEach(el => {
+      el.classList.toggle('hot', !!(door && el.dataset.id === door.dataset.id));
+    });
+  });
+
+  document.body.addEventListener('submit', (event) => {
+    if (event.target.id !== 'login-form') return;
+    event.preventDefault();
+    handle('login', event.target, event);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === ' ' && view.state && view.state.reveal) {
+      event.preventDefault();
+      dismissReveal();
+      return;
+    }
+    if (!view.state || !view.state.run) return;
+    if (view.state.reveal) return;
+    if (view.state.run.battle && view.state.run.battle.turn === 'player' && event.key >= '1' && event.key <= '9') {
+      const moves = UIRPG.Run.battleMoves(view.state.run);
+      const action = moves[Number(event.key) - 1];
+      if (action) handle('battle', { dataset: { id: action } }, event);
+      return;
+    }
+    const list = exits();
+    if (!list.length) return;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const dir = event.key === 'ArrowLeft' ? 'left' : 'right';
+      const found = list.find(ex => ex.dir === dir) || list[0];
+      view.hotExit = found.id;
+      view.hotIndex = list.indexOf(found);
+      paint();
+    }
+    if (event.key === 'Enter' && view.hotExit) {
+      event.preventDefault();
+      handle('move', { dataset: { id: view.hotExit } }, event);
+    }
+  });
+
+  async function handle(act, target) {
+    if (act === 'login' || act === 'register') {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const name = document.getElementById('name').value.trim();
+      try {
+        const me = await api(act === 'register' ? '/api/register' : '/api/login', {
+          method: 'POST',
+          body: { email, password, name },
+        });
+        adopt(me);
+        paint();
+      } catch (err) {
+        const slot = document.getElementById('auth-error');
+        if (slot) slot.textContent = (err.data && err.data.error) || err.message;
+      }
+      return;
+    }
+    if (act === 'logout') {
+      await api('/api/logout', { method: 'POST', body: {} });
+      view.user = null;
+      view.state = UIRPG.Run.session();
+      paint();
+      return;
+    }
+    if (act === 'open-admin') {
+      view.adminOpen = true;
+      paint();
+      return;
+    }
+    if (act === 'close-admin') {
+      view.adminOpen = false;
+      paint();
+      return;
+    }
+    if (act === 'publish') {
+      const list = document.getElementById('kind').value;
+      let item;
+      try {
+        item = JSON.parse(document.getElementById('entry').value);
+      } catch (err) {
+        document.getElementById('content-error').textContent = 'That is not valid JSON.';
         return;
       }
-      return;
-    }
-
-    if (dragIdx < 0) return;
-
-    const tab = e.target.closest('[data-tab]');
-    if (tab) {
-      const fromBank = state.activeTab === 'bank';
-      const targetTab = tab.dataset.tab;
-      if (fromBank && targetTab === 'inv') {
-        UIRPG.Actions.moveToInventory(state, dragIdx);
-      } else if (!fromBank && targetTab === 'bank') {
-        UIRPG.Actions.moveToBank(state, dragIdx);
+      if (view.user && view.user.local) {
+        const next = UIRPG.Content.clone(view.content);
+        try {
+          UIRPG.Content.apply(next, list, item);
+        } catch (err) {
+          document.getElementById('content-error').textContent = err.message;
+          return;
+        }
+        const checked = UIRPG.Content.validate(next);
+        if (!checked.ok) {
+          document.getElementById('content-error').textContent = checked.errors.join(' ');
+          return;
+        }
+        try {
+          writeLocal('content', next);
+        } catch (err) {
+          document.getElementById('content-error').textContent = 'This browser did not keep that story.';
+          return;
+        }
+        view.content = next;
+        view.adminOpen = false;
+        view.state.notice = 'Published.';
+        paint();
+        return;
       }
-      saveAndRender();
-      dragIdx = -1;
+      try {
+        const result = await api('/api/content', { method: 'POST', body: { list, item } });
+        view.content = result.content;
+        view.adminOpen = false;
+        view.state.notice = 'Published.';
+        paint();
+      } catch (err) {
+        const slot = document.getElementById('content-error');
+        const errors = err.data && err.data.errors;
+        if (slot) slot.textContent = errors ? errors.join(' ') : err.message;
+      }
       return;
     }
-
-    const slot = e.target.closest('.equip-slot');
-    if (!slot) return;
-    const slotKind = slot.dataset.kind;
-    if (!slotKind) return;
-
-    const fromBank = state.activeTab === 'bank';
-    const arr = fromBank ? state.bank : state.inventory;
-    const item = arr[dragIdx];
-    if (!item) return;
-
-    let equipSlot = slotKind;
-    if (item.kind === 'ring' && (slotKind === 'ring1' || slotKind === 'ring2')) {
-      equipSlot = slotKind;
-    } else if (item.kind !== slotKind) {
+    if (act === 'new-run') {
+      view.picking = true;
+      paint();
       return;
     }
-
-    const old = state.equipment[equipSlot];
-    state.equipment[equipSlot] = item;
-    arr.splice(dragIdx, 1);
-    if (old) {
-      if (arr === state.bank) state.bank.push(old);
-      else state.inventory.push(old);
+    if (act === 'pick-class') {
+      UIRPG.Run.beginCreation(view.state, view.content, target.dataset.id, Math.floor(Math.random() * 1e9) + 1);
+      view.picking = false;
+      view.held = null;
+      await after(() => {});
+      return;
     }
-
-    UIRPG.State.addGameLog(state, `Equipped ${UIRPG.Drops.displayName(item)}`, 'subtle');
-    const stats = UIRPG.State.computeStats(state);
-    if (state.player.hp > stats.maxHp) state.player.hp = stats.maxHp;
-    UIRPG.Events.emit('inventory:changed');
-    UIRPG.Events.emit('equipment:changed');
-
-    saveAndRender();
-    dragIdx = -1;
+    if (act === 'roll-ability') {
+      UIRPG.Run.rollAbility(view.state, Math.random);
+      await after(() => {});
+      return;
+    }
+    if (act === 'hold-roll') {
+      const index = Number(target.dataset.index);
+      const creation = view.state.creation;
+      if (creation) {
+        Object.keys(creation.assignments).forEach(key => {
+          if (creation.assignments[key] === index) delete creation.assignments[key];
+        });
+      }
+      view.held = view.held === index ? null : index;
+      paint();
+      return;
+    }
+    if (act === 'place') {
+      const creation = view.state.creation;
+      const ability = target.dataset.ability;
+      if (!creation) return;
+      if (view.held == null) {
+        const index = creation.assignments[ability];
+        if (index == null) return;
+        delete creation.assignments[ability];
+        view.held = index;
+        paint();
+        return;
+      }
+      UIRPG.Run.assign(view.state, view.held, ability);
+      view.held = null;
+      paint();
+      return;
+    }
+    if (act === 'toggle-sheet') {
+      view.sheetOpen = !view.sheetOpen;
+      paint();
+      return;
+    }
+    if (act === 'confirm-assign') {
+      const result = UIRPG.Run.confirmAssign(view.state, view.content, Math.random);
+      if (!result.ok) view.state.notice = result.error;
+      await after(() => {});
+      return;
+    }
+    if (act === 'continue') {
+      view.state.phase = 'play';
+      await after(() => {});
+      return;
+    }
+    if (act === 'to-table') {
+      view.state.phase = 'table';
+      view.state.recap = null;
+      await after(() => {});
+      return;
+    }
+    if (act === 'option') {
+      const result = UIRPG.Run.choose(view.state, view.content, target.dataset.id);
+      if (result && !result.ok) view.state.notice = result.error;
+      await after(() => {});
+      return;
+    }
+    if (act === 'move') {
+      const result = UIRPG.Run.move(view.state, view.content, target.dataset.id);
+      if (result && !result.ok && result.error) view.state.notice = result.error;
+      view.hotExit = null;
+      await after(() => {});
+      return;
+    }
+    if (act === 'battle') {
+      const result = UIRPG.Run.actBattle(view.state, view.content, target.dataset.id, Math.random);
+      if (result && !result.ok && result.error) view.state.notice = result.error;
+      await after(() => {});
+      return;
+    }
+    if (act === 'spend-die') {
+      UIRPG.Run.restSpend(view.state, view.content, Math.random);
+      await after(() => {});
+      return;
+    }
+    if (act === 'descend') {
+      UIRPG.Run.descend(view.state, view.content, Math.random);
+      await after(() => {});
+      return;
+    }
+    if (act === 'take-pet') {
+      UIRPG.Run.keepPet(view.state, true);
+      await after(() => {});
+      return;
+    }
+    if (act === 'keep-pet') {
+      UIRPG.Run.keepPet(view.state, false);
+      await after(() => {});
+      return;
+    }
+    if (act === 'ask-abandon') {
+      UIRPG.UI.Modal.confirm('Abandon this run? The table keeps your unlocks.', () => {});
+    }
   }
 
-  function onDragEnd() {
-    document.querySelectorAll('.drag-over, .drag-over-bank, .drag-over-tab').forEach(el => el.classList.remove('drag-over', 'drag-over-bank', 'drag-over-tab'));
-    dragIdx = -1;
-    dragEquipSlot = null;
-    setTimeout(() => { dragHappened = false; }, 0);
-  }
-
-  function saveAndRender() {
-    UIRPG.Save.save(state);
-    render();
-  }
-
-  document.addEventListener('DOMContentLoaded', init);
+  boot();
 })();
