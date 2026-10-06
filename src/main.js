@@ -243,6 +243,16 @@
       }
       return;
     }
+    if (act === 'test-run') {
+      if (!view.user || !view.user.admin) return;
+      view.adminOpen = false;
+      view.picking = false;
+      view.held = null;
+      const result = UIRPG.Run.quickTest(view.state, view.content, Math.floor(Math.random() * 1e9) + 1);
+      if (result && !result.ok) view.state.notice = result.error;
+      await after(() => {});
+      return;
+    }
     if (act === 'new-run') {
       view.picking = true;
       paint();

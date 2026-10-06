@@ -296,6 +296,7 @@ UIRPG.UI.Render = (() => {
           ${notice}
           ${cont}
           <button type="button" data-act="new-run">New run</button>
+          ${user.admin ? '<button type="button" data-act="test-run">Test run</button>' : ''}
           ${admin}
           <button type="button" data-act="logout">Log out</button>
           <div class="unlocks">${unlocks}</div>

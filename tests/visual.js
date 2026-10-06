@@ -91,7 +91,9 @@ async function main() {
   const player = `player${stamp}@play.test`;
   await login(player, 'password1', 'Ada');
   const hasAdmin = await page.$('[data-act="open-admin"]');
+  const hasTest = await page.$('[data-act="test-run"]');
   assert('player does not see add content', !hasAdmin);
+  assert('player does not see test run', !hasTest);
   await shot(page, 'desktop-table');
 
   await page.click('[data-act="new-run"]');
@@ -207,6 +209,15 @@ async function main() {
   const adminHeading = await page.$eval('#admin h2', el => el.textContent);
   assert('admin form is open', adminHeading === 'Add content', adminHeading);
   await shot(page, 'desktop-admin');
+  await page.click('[data-act="close-admin"]');
+  await page.waitForSelector('[data-act="test-run"]');
+  await page.click('[data-act="test-run"]');
+  await page.waitForSelector('#page .prose');
+  const testFloor = await page.$eval('.map-label', el => el.textContent);
+  const testSheet = await page.$eval('#sheet', el => el.textContent);
+  assert('test run opens a floor', /Floor/.test(testFloor), testFloor);
+  assert('test run brings the wolf', /Wolf/.test(testSheet) && /Healing Potion/.test(testSheet));
+  await shot(page, 'desktop-test-run');
 
   await browser.close();
   if (process.exitCode) process.exit(process.exitCode);

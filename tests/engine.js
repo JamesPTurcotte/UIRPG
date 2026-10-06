@@ -195,6 +195,10 @@ assert('zero hit points clears the run and keeps unlocks', low.phase === 'recap'
 UIRPG.Meta.consider(low.meta, content, { floor: 2, flags: {} });
 assert('floor 2 unlocks the wilds for the next run', low.meta.grants.themes.indexOf('wilds') !== -1);
 
+const trial = UIRPG.Run.session(UIRPG.Meta.fresh());
+const tested = UIRPG.Run.quickTest(trial, content, 7);
+assert('a test run starts on floor 1 with the wolf', tested.ok && trial.phase === 'play' && trial.run.floor === 1 && trial.run.classId === 'ranger' && trial.run.pet.id === 'wolf' && trial.run.abilities.cha === 14 && trial.run.inventory.length === 1 && trial.run.map);
+
 if (failed) {
   console.error(failed + ' failed');
   process.exit(1);
