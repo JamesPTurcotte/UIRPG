@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "build": "bash build.sh"
+    "build": "bash build.sh",
+    "test": "node tests/engine.js",
+    "start": "node server/index.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.43.1"
   }
 }
